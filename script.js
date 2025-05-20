@@ -1,3 +1,42 @@
+// Thêm các biến config Google Drive
+const CLIENT_ID = '542897549830-u65s0fcgvnjqee8oqpavndr4nnehlkd0.apps.googleusercontent.com';
+const API_KEY = 'AIzaSyC_5A03lw4TkaBDVwM-y7RMYJauROj0kEI';
+const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
+const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+
+let tokenClient;
+let gapiInited = false;
+let gisInited = false;
+
+// Khởi tạo Google API
+function gapiLoaded() {
+    gapi.load('client', initializeGapiClient);
+}
+
+async function initializeGapiClient() {
+    await gapi.client.init({
+        apiKey: API_KEY,
+        discoveryDocs: [DISCOVERY_DOC],
+    });
+    gapiInited = true;
+    maybeEnableButtons();
+}
+
+function gisLoaded() {
+    tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPES,
+        callback: '', // Được định nghĩa sau khi load
+    });
+    gisInited = true;
+    maybeEnableButtons();
+}
+
+function maybeEnableButtons() {
+    if (gapiInited && gisInited) {
+        document.getElementById('exportBtn').style.display = 'block';
+    }
+}
 // Variables 
 let isAdmin = false; 
 const ADMIN_PASSWORD = '123'; 
@@ -152,24 +191,80 @@ localStorage.setItem('savedData', JSON.stringify([...savedData]));
 alert('Đã lưu dữ liệu thành công!');
 }
 
-function exportToExcel() { if (!isAdmin) { alert('Bạn không có quyền thực hiện chức năng này!'); return; }
+async function exportToExcel() {
+    if (!isAdmin) {
+        alert('Bạn không có quyền thực hiện chức năng này!');
+        return;
+    }
 
-if (!originalData) {
-    alert('Vui lòng tải dữ liệu trước!');
-    return;
+    if (!originalData) {
+        alert('Vui lòng tải dữ liệu trước!');
+        return;
+    }
+
+    try {
+        // Xác thực với Google
+        tokenClient.callback = async (resp) => {
+            if (resp.error !== undefined) {
+                throw (resp);
+            }
+
+            // Tạo dữ liệu Excel
+            const exportData = originalData.map((row, index) => {
+                const newRow = { ...row };
+                newRow['Số lượng thực tế'] = savedData.get(index) || '';
+                return newRow;
+            });
+
+            const newWb = XLSX.utils.book_new();
+            const newWs = XLSX.utils.json_to_sheet(exportData);
+            XLSX.utils.book_append_sheet(newWb, newWs, 'Kiểm Kê');
+
+            // Chuyển đổi workbook thành binary string
+            const excelBuffer = XLSX.write(newWb, { bookType: 'xlsx', type: 'binary' });
+
+            // Chuyển đổi binary string thành Blob
+            const blob = new Blob([s2ab(excelBuffer)], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            });
+
+            // Upload lên Google Drive
+            const metadata = {
+                name: 'kiem_ke_thuc_te.xlsx',
+                mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            };
+
+            const form = new FormData();
+            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+            form.append('file', blob);
+
+            const response = await gapi.client.drive.files.create({
+                resource: metadata,
+                media: {
+                    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    body: blob
+                }
+            });
+
+            alert('File đã được xuất và lưu vào Google Drive!');
+        };
+
+        if (gapi.client.getToken() === null) {
+            tokenClient.requestAccessToken({ prompt: 'consent' });
+        } else {
+            tokenClient.requestAccessToken({ prompt: '' });
+        }
+    } catch (err) {
+        alert('Lỗi khi xuất file: ' + err.message);
+    }
 }
 
-const exportData = originalData.map((row, index) => {
-    const newRow = { ...row };
-    newRow['Số lượng thực tế'] = savedData.get(index) || '';
-    return newRow;
-});
-
-const newWb = XLSX.utils.book_new();
-const newWs = XLSX.utils.json_to_sheet(exportData);
-
-XLSX.utils.book_append_sheet(newWb, newWs, 'Kiểm Kê');
-XLSX.writeFile(newWb, 'kiem_ke_thuc_te.xlsx');
+// Hàm hỗ trợ chuyển đổi binary string
+function s2ab(s) {
+    const buf = new ArrayBuffer(s.length);
+    const view = new Uint8Array(buf);
+    for (let i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xFF;
+    return buf;
 }
 
 function clearData() { if (!isAdmin) { alert('Bạn không có quyền thực hiện chức năng này!'); return; }
