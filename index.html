@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Quản lý Kiểm kê Excel</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Màn hình chọn vai trò -->
+    <div id="roleScreen" class="login-screen">
+        <div class="login-container">
+            <button class="role-button admin-btn" onclick="showPasswordModal()">Admin</button>
+            <button class="role-button inventory-btn" onclick="showInventoryScreen()">Kiểm kê</button>
+        </div>
+    </div>
+
+    <!-- Modal nhập mật khẩu -->
+    <div id="passwordModal" class="password-modal">
+        <div class="modal-content">
+            <h3>Nhập mật khẩu Admin</h3>
+            <input type="password" id="adminPassword" placeholder="Nhập mật khẩu">
+            <button onclick="checkPassword()" class="admin-btn">Đăng nhập</button>
+            <button onclick="closePasswordModal()" class="logout-btn">Hủy</button>
+        </div>
+    </div>
+
+    <!-- Màn hình chính -->
+    <div id="mainScreen" class="hide">
+        <div class="container">
+            <div class="header">
+                <h2 id="screenTitle">Hệ thống Kiểm kê</h2>
+                <button class="logout-btn" onclick="logout()">Đăng xuất</button>
+            </div>
+            <div id="adminControls" class="input-container">
+                <input type="file" id="fileInput" accept=".xlsx, .xls" onchange="validateFile(this)">
+                <button onclick="loadExcel()">Tải Excel</button>
+                <button onclick="clearData()">Xóa Dữ Liệu</button>
+            </div>
+            <div class="table-container">
+                <div id="tableContainer"></div>
+            </div>
+            <div style="margin-top: 20px; text-align: right;">
+                <button onclick="saveData()" class="save-btn">Lưu Dữ Liệu</button>
+                <button onclick="exportToExcel()" class="export-btn" id="exportBtn">Xuất ra Excel</button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>© 2025 - Lập trình và phát triển web này thuộc quyền sở hữu của Châu Chí Kil</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

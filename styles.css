@@ -1,0 +1,320 @@
+@font-face {
+    font-family: 'Calibri';
+    src: url('https://db.onlinewebfonts.com/t/0a6ee448d1bd65c56f6cf256a7c6f20a.woff2') format('woff2');
+}
+
+body {
+    font-family: Calibri, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: #f5f5f5;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 60px;
+}
+
+.input-container {
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#adminControls {
+    display: none;
+}
+
+#adminControls.show {
+    display: flex;
+}
+
+input[type="file"] {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: white;
+}
+
+button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: Calibri, sans-serif;
+    font-size: 14px;
+    transition: all 0.3s ease;
+}
+
+button:hover {
+    opacity: 0.9;
+}
+
+button:active {
+    transform: translateY(1px);
+}
+
+/* Button styles */
+button:nth-child(2) {
+    background-color: #4CAF50;
+    color: white;
+}
+
+button:nth-child(3) {
+    background-color: #ff4444;
+    color: white;
+}
+
+.save-btn {
+    background-color: #2196F3;
+    color: white;
+}
+
+.export-btn {
+    background-color: #ff9800;
+    color: white;
+}
+
+/* Table styles */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    background-color: white;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    font-size: 14px;
+    line-height: 1.2;
+}
+
+th, td {
+    padding: 4px 8px;
+    text-align: left;
+    border: 1px solid #e0e0e0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+    height: 20px;
+}
+
+th {
+    background-color: #f4f4f4;
+    font-weight: bold;
+    color: #333;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.table-container {
+    overflow-x: auto;
+    max-width: 100%;
+    margin-top: 20px;
+    position: relative;
+}
+
+input[type="number"] {
+    width: 150px;
+    padding: 2px 4px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 13px;
+    height: 20px;
+}
+
+.saved-value {
+    background-color: #e8f5e9;
+}
+
+/* Login screen styles */
+.login-screen {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background-color: #f5f5f5;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+}
+
+.login-container {
+    display: flex;
+    gap: 20px;
+    padding: 30px;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.role-button {
+    padding: 15px 30px;
+    font-size: 16px;
+}
+
+.admin-btn {
+    background-color: #2196F3;
+    color: white;
+}
+
+.inventory-btn {
+    background-color: #4CAF50;
+    color: white;
+}
+
+/* Password modal styles */
+.password-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    justify-content: center;
+    align-items: center;
+    z-index: 1001;
+}
+
+.modal-content {
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    width: 300px;
+    text-align: center;
+}
+
+.modal-content input {
+    width: 100%;
+    padding: 8px;
+    margin: 10px 0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+.hide {
+    display: none !important;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-radius: 6px;
+}
+
+.logout-btn {
+    background-color: #ff4444;
+    color: white;
+}
+
+/* Responsive styles */
+@media screen and (max-width: 1200px) {
+    table {
+        font-size: 13px;
+        line-height: 1.1;
+    }
+    
+    th, td {
+        padding: 3px 6px;
+        height: 22px;
+    }
+
+    input[type="number"] {
+        width: 70px;
+        font-size: 12px;
+        height: 18px;
+    }
+}
+
+@media screen and (max-width: 768px) {
+    table {
+        font-size: 12px;
+        line-height: 1;
+    }
+    
+    th, td {
+        padding: 2px 4px;
+        height: 20px;
+    }
+
+    input[type="number"] {
+        width: 60px;
+        font-size: 11px;
+        height: 16px;
+    }
+
+    .container {
+        padding: 10px;
+        margin-bottom: 50px;
+    }
+
+    .input-container {
+        padding: 10px;
+        flex-direction: column;
+    }
+
+    #adminControls.show {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    button {
+        width: 100%;
+    }
+
+    .footer {
+        font-size: 12px;
+        padding: 8px 0;
+    }
+}
+
+/* Scrollbar styles */
+.table-container::-webkit-scrollbar {
+    height: 8px;
+}
+
+.table-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.table-container::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+.table-container::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Footer styles */
+.footer {
+    position: fixed;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    background-color: #f8f9fa;
+    color: #333;
+    text-align: center;
+    padding: 10px 0;
+    font-size: 14px;
+    border-top: 1px solid #ddd;
+    z-index: 1000;
+}
