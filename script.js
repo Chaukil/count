@@ -232,70 +232,65 @@ async function exportToExcel() {
         // Chuẩn bị dữ liệu để xuất (kết hợp dữ liệu gốc và số lượng thực tế đã lưu)
         const exportData = originalData.map((row, index) => {
             const newRow = { ...row }; // Tạo bản sao của hàng gốc
-            // Thêm cột 'Số lượng thực tế' vào hàng
             newRow['Số lượng thực tế'] = savedData.get(index) || '';
             return newRow;
         });
 
         // Tạo workbook Excel mới
         const wb = XLSX.utils.book_new();
-        // Chuyển dữ liệu JSON thành sheet Excel
         const ws = XLSX.utils.json_to_sheet(exportData);
-        // Thêm sheet vào workbook với tên "Kiểm Kê"
         XLSX.utils.book_append_sheet(wb, ws, 'Kiểm Kê');
 
-        // Tạo file Excel dưới dạng một mảng byte (array buffer)
         const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-        // Tạo Blob từ array buffer
         const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
 
-        // Chuyển Blob sang định dạng Base64 để gửi qua mạng
         const reader = new FileReader();
         reader.readAsDataURL(blob);
 
-        reader.onloadend = async function() {
-            // Lấy phần Base64 từ Data URL (loại bỏ "data:application/octet-stream;base64,")
+        reader.onloadend = function() {
             const base64data = reader.result.split(',')[1];
-            // Tạo tên file duy nhất với ngày tháng năm và giờ phút giây
             const filename = `kiem_ke_${new Date().toLocaleDateString('vi-VN').replace(/\//g, '-')}_${new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).replace(/:/g, '-')}.xlsx`;
 
-            // Gửi dữ liệu file Base64 lên Google Apps Script Web App
-            try {
-                const response = await fetch(GOOGLE_APPS_SCRIPT_WEB_APP_URL, {
-                    method: 'POST',
-                    mode: 'cors', // Đảm bảo rằng yêu cầu CORS được xử lý đúng
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        filename: filename,
-                        fileContent: base64data
-                    })
-                });
+            // **Sử dụng XMLHttpRequest thay vì fetch**
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', GOOGLE_APPS_SCRIPT_WEB_APP_URL, true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
 
-                // Xử lý phản hồi từ Apps Script
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Upload failed on server: ${response.status} - ${errorText}`);
-                }
-
-                const result = await response.json();
-                if (result.status === "success") {
-                    console.log('File đã được tải lên Google Drive thành công:', result);
-                    alert('File đã được xuất thành công vào Google Drive!');
+            xhr.onload = function() {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try {
+                        const result = JSON.parse(xhr.responseText);
+                        if (result.status === "success") {
+                            console.log('File đã được tải lên Google Drive thành công:', result);
+                            alert('File đã được xuất thành công vào Google Drive!');
+                        } else {
+                            alert('Có lỗi từ Google Apps Script: ' + (result.message || "Lỗi không xác định."));
+                        }
+                    } catch (parseError) {
+                        console.error('Lỗi phân tích phản hồi JSON:', parseError, 'Phản hồi:', xhr.responseText);
+                        alert('Có lỗi khi xử lý phản hồi từ server.');
+                    }
                 } else {
-                    // Xử lý lỗi từ Apps Script
-                    throw new Error(result.message || "Lỗi không xác định từ Google Apps Script.");
+                    console.error('Lỗi khi gửi dữ liệu đến Google Apps Script (XHR Status):', xhr.status, xhr.statusText, xhr.responseText);
+                    alert('Có lỗi khi tải file lên Google Drive. Status: ' + xhr.status);
                 }
-            } catch (innerError) {
-                console.error('Lỗi khi gửi dữ liệu đến Google Apps Script:', innerError);
-                alert('Có lỗi khi tải file lên Google Drive: ' + innerError.message);
-            } finally {
-                // Đảm bảo nút được khôi phục trạng thái cuối cùng
                 exportButton.disabled = false;
                 exportButton.textContent = 'Xuất ra Excel';
-            }
+            };
+
+            xhr.onerror = function() {
+                console.error('Lỗi mạng hoặc CORS (XHR onerror): Không thể kết nối đến Google Apps Script Web App.', xhr);
+                alert('Lỗi mạng hoặc CORS: Không thể tải file lên Google Drive.');
+                exportButton.disabled = false;
+                exportButton.textContent = 'Xuất ra Excel';
+            };
+
+            xhr.send(JSON.stringify({
+                filename: filename,
+                fileContent: base64data
+            }));
         };
+
     } catch (error) {
         console.error('Lỗi khi chuẩn bị file Excel để xuất:', error);
         alert('Có lỗi khi xuất file: ' + error.message);
