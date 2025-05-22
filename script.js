@@ -104,7 +104,7 @@ function showMainScreen() {
 
     // Xác định quyền Admin dựa trên email hoặc một trường trong Firestore
     // Ví dụ đơn giản: coi một email cụ thể là Admin
-    const ADMIN_EMAIL = "admin@example.com"; // THAY THẾ BẰNG EMAIL ADMIN THỰC CỦA BẠN TRONG FIREBASE AUTH
+    const ADMIN_EMAIL = "chauchikil01@gmail.com"; // THAY THẾ BẰNG EMAIL ADMIN THỰC CỦA BẠN TRONG FIREBASE AUTH
     if (auth.currentUser && auth.currentUser.email === ADMIN_EMAIL) {
         currentRole = 'admin';
     } else {
