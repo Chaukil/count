@@ -1,61 +1,33 @@
-// Thêm các biến config Google Drive
-const CLIENT_ID = '542897549830-u65s0fcgvnjqee8oqpavndr4nnehlkd0.apps.googleusercontent.com';
-const API_KEY = 'AIzaSyC_5A03lw4TkaBDVwM-y7RMYJauROj0kEI';
-const DISCOVERY_DOCS = ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'];
-const SCOPES = [
-    'https://www.googleapis.com/auth/drive.file',
-    'https://www.googleapis.com/auth/drive.appdata',
-    'https://www.googleapis.com/auth/userinfo.profile',
-    'https://www.googleapis.com/auth/userinfo.email'
-].join(' ');
+// Constants and Variables for Google Drive
+const FOLDER_ID = '1WnyNjUm3XVa_ARM-SXFrZtEyIE6Lfehi'; // ID folder trong Drive
+const SERVICE_ACCOUNT_KEY = {  
+        "type": "service_account",
+        "project_id": "inventory-management-460410",
+        "private_key_id": "0a339c9f64fe7de10f6c1237a582c3851d18720d",
+        "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC3k2MJz1pYjzqD\nWTSgyao8FinR2Ejo16OECxBzjfthZH+Yo8idqSRU/5tkz6zUS3uRYh3sMdXtZycv\nZ0YvDfre9O+PO2cXrnfTDkZgLXH/L7jamLA9k0xiaAZGdAJghLkheU5bYJq+snx3\nNvOVLUNA3bssCXe63y/LIkuEnxPyQKem5ca4DtVtySjByx5Pg85SJzCxg8bdqIlf\nEBgHv6F6IGsjFOtj28CAyR4iIL9xCSPdMmOveqWgtkSfU4rsaZmj8DYA7uVv3OYm\nOB5Zm42muW40sgZDC7pPRa/JYzs6HRYfOeLIgWLn2U0pxVjIy+3Fk1LfVjO3hfjy\nBASe1c5FAgMBAAECggEALgWnOJhhP/54XuGITh8ArJup1E/yx1z4Q2w6rZ2Uve/i\nBTRaYRw8XYrPPFDMNVTPH72HXuWHikLoEfxEHhvVHvws6q2rxMYaiDD197qs75rZ\nLwREestoxOrrV9JRnjzn5LpyqHnpkZFRntmJ64YzbBmqiPm+qHy3kKeCYzc2Wu7o\n6yUMELHE3Nofw6NacBbll1WymRa+ZLAgB2wDJ/C9BgNxx9DRWvL5lQuN0+T17VE6\n1f7YVH6t1vcxtHggC9JGX7uG5l9977UzDw9bM3w+d9FzLXmtJsn8RreQom9ipE+5\nBShQilmI5f9cCBuK34RPEywo6Jf52dvM0pJFDkKFKQKBgQD39NY5AFugveil+Qb5\n0gSAbF4BorkIvvqU2om9ByZK/pK6wyIdVCyjaz1gqe/jQS/iABYqOQFW/LTX43WG\n3gi+CrAEe++4A0ruaM6Jt2xD7cnE0H71g61UzBfK9Q7Egrylvwk7S3QUVWZvKlUR\nWhGiFCl0XzJ83U+n/KRMu6rffwKBgQC9h+X+v35EggWFt5wBCTWMMBafqrVPmGRm\nhGZHvqEs/l3Ln1LcVlr/asntSAhSCgfPyjMXuV0xgl135TD+WrC5acqzcASwOcHy\nMF1MarleqaL8hMBAwv89pQYz83YCTEP3g4noi6KGVD6LfN/TVe9jKp3Q1vHI9dvX\nQ1tMjjG0OwKBgQDCMYehRu18G5/cdQeImnoaFkUdpNKjzea0s99SIwpTi8Ng77iF\nHcqEBlYgoZcV9ZTJvGWfldu9w9biiesewEA6jmZCbMpW5IVH6N9xLi1lmhL+yIfW\nQtV6ZwlvU7PIJdgXO2HAhZyY3DWIdLABEfhjZsT8th31euKK3yvSSNxPgwKBgCEU\nylk3tWNhynL3hFxN7jHE5v4BftogwE2AiJW3OUywLVDwQzdAP2vbiNlIvGMNayWi\npl5atWCB36ygrXeH/tauF3pQcBEOU8LhHDfNXQOf2ln3FdN39bMdzcJdmVh3VVmr\ndPPJA5ostCoGps6tbjZB5v/ftJ4eA7xD/niTTSunAoGAHsR3GWWmQ3TAIl4CC/Vr\nlJcT8Fx7BBoyz0YpR/huMi+GZ7W7xDQ3hUTxj0R5g6NAGvdbt3gv3W+OcPqsLIPJ\ndPQI4sJgsFyfJ6QgrpCjVEYsAKtwDMiU5wdj6xjX4cU2lEudiFUTQyNFnT/SGvGW\ndwPa/ymCaKfYVBwtG8N3qDw=\n-----END PRIVATE KEY-----\n",
+        "client_email": "drive-storage@inventory-management-460410.iam.gserviceaccount.com",
+        "client_id": "104819673711849677823",
+        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+        "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/drive-storage%40inventory-management-460410.iam.gserviceaccount.com",
+        "universe_domain": "googleapis.com"      
+};
 
+// Constants and Variables for Application
 let isAdmin = false;
 const ADMIN_PASSWORD = '123';
 let workbook = null;
 let originalData = null;
 let savedData = new Map();
-let tokenClient;
-let gapiInited = false;
-let gisInited = false;
-let accessToken = null;
+let jwtClient = null;
 
 // Initialize when page loads
 window.onload = function() {
     document.getElementById('roleScreen').classList.remove('hide');
     document.getElementById('mainScreen').classList.add('hide');
-    initializeGoogleApi();
+    initializeJWTClient();
 };
-
-// Google API Initialization
-async function initializeGoogleApi() {
-    try {
-        await gapi.client.init({
-            apiKey: API_KEY,
-            discoveryDocs: DISCOVERY_DOCS
-        });
-        gapiInited = true;
-        maybeEnableButtons();
-        console.log('Google API initialized successfully');
-    } catch (err) {
-        console.error('Error initializing GAPI client', err);
-    }
-}
-
-function gisLoaded() {
-    tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPES,
-        callback: '', // Defined later
-    });
-    gisInited = true;
-    maybeEnableButtons();
-}
-
-function maybeEnableButtons() {
-    if (gapiInited && gisInited) {
-        document.getElementById('exportBtn').style.display = 'inline-block';
-    }
-}
 
 // Login functions
 function showPasswordModal() {
@@ -113,6 +85,28 @@ function logout() {
     isAdmin = false;
     document.getElementById('mainScreen').classList.add('hide');
     document.getElementById('roleScreen').classList.remove('hide');
+}
+
+// Google Drive Service Account initialization
+async function initializeJWTClient() {
+    if (!jwtClient) {
+        jwtClient = new google.auth.JWT(
+            SERVICE_ACCOUNT_KEY.client_email,
+            null,
+            SERVICE_ACCOUNT_KEY.private_key,
+            ['https://www.googleapis.com/auth/drive.file'],
+            'chauchikil01@gmail.com' // Email tài khoản Drive đích
+        );
+
+        try {
+            await jwtClient.authorize();
+            console.log('JWT client initialized');
+        } catch (error) {
+            console.error('Error initializing JWT client:', error);
+            throw error;
+        }
+    }
+    return jwtClient;
 }
 
 // File validation
@@ -246,42 +240,37 @@ function saveData() {
     alert('Đã lưu dữ liệu thành công!');
 }
 
-// Google Drive Export Function
+// Export to Google Drive functions
 async function exportToExcel() {
-    if (!isAdmin) {
-        alert('Bạn không có quyền thực hiện chức năng này!');
-        return;
-    }
-
     if (!originalData) {
         alert('Vui lòng tải dữ liệu trước!');
         return;
     }
 
     try {
-        // Request user consent
-        tokenClient.callback = async (response) => {
-            if (response.error !== undefined) {
-                throw response;
-            }
+        const exportButton = document.getElementById('exportBtn');
+        exportButton.disabled = true;
+        exportButton.textContent = 'Đang xuất...';
 
-            accessToken = response.access_token;
-            await uploadToGoogleDrive();
-        };
+        await uploadToGoogleDrive();
 
-        if (gapi.client.getToken() === null) {
-            tokenClient.requestAccessToken({ prompt: 'consent' });
-        } else {
-            tokenClient.requestAccessToken({ prompt: '' });
-        }
+        exportButton.disabled = false;
+        exportButton.textContent = 'Xuất ra Excel';
     } catch (err) {
         console.error('Error:', err);
         alert('Có lỗi khi xuất file: ' + err.message);
+        
+        const exportButton = document.getElementById('exportBtn');
+        exportButton.disabled = false;
+        exportButton.textContent = 'Xuất ra Excel';
     }
 }
 
 async function uploadToGoogleDrive() {
     try {
+        // Ensure JWT client is initialized
+        const auth = await initializeJWTClient();
+
         // Create Excel file
         const exportData = originalData.map((row, index) => {
             const newRow = { ...row };
@@ -299,48 +288,29 @@ async function uploadToGoogleDrive() {
             type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         });
 
-        // Create file metadata
+        // Prepare metadata
         const metadata = {
-            name: `kiem_ke_${new Date().toLocaleDateString('vi-VN')}.xlsx`,
-            mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            name: `kiem_ke_${new Date().toLocaleString('vi-VN').replace(/[/:]/g, '_')}.xlsx`,
+            mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            parents: [FOLDER_ID]
         };
 
-        // Create multipart request
+        // Create form data
         const form = new FormData();
-        form.append('metadata', new Blob(
-            [JSON.stringify(metadata)],
-            { type: 'application/json' }
-        ));
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
         form.append('file', blob);
 
-        // Upload file
+        // Upload to Drive
         const response = await fetch(
             'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
             {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${accessToken}`
+                    'Authorization': `Bearer ${auth.credentials.access_token}`
                 },
                 body: form
             }
         );
-
-        if (response.status === 403) {
-            // Try to refresh token
-            await new Promise((resolve) => {
-                tokenClient.requestAccessToken({ prompt: 'consent' });
-                tokenClient.callback = (resp) => {
-                    if (resp.error !== undefined) {
-                        throw resp;
-                    }
-                    accessToken = resp.access_token;
-                    resolve();
-                };
-            });
-            
-            // Try upload again
-            return await uploadToGoogleDrive();
-        }
 
         if (!response.ok) {
             throw new Error('Upload failed: ' + response.statusText);
@@ -351,13 +321,9 @@ async function uploadToGoogleDrive() {
         alert('File đã được xuất thành công vào Google Drive!');
 
     } catch (error) {
-        if (error.status === 401) {
-            alert('Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
-            tokenClient.requestAccessToken({ prompt: 'consent' });
-            return;
-        }
         console.error('Error in uploadToGoogleDrive:', error);
         alert('Lỗi khi tải lên Google Drive: ' + error.message);
+        throw error;
     }
 }
 
@@ -383,7 +349,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const script = document.createElement('script');
     script.src = 'https://apis.google.com/js/api.js';
     script.onload = function() {
-        gapi.load('client:auth2', initializeGoogleApi);
+        gapi.load('client:auth2', initializeJWTClient);
     };
     document.body.appendChild(script);
 });
