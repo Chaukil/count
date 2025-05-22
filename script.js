@@ -1,34 +1,23 @@
+// File: script.js
+
 // Constants and Variables
 let isAdmin = false;
-const ADMIN_PASSWORD = '123';
+const ADMIN_PASSWORD = '123'; // Vẫn giữ nguyên mật khẩu Admin
 let workbook = null;
 let originalData = null;
 let savedData = new Map();
 
-// Google Drive Service Account Config
-const SERVICE_ACCOUNT_CONFIG = {
-    "type": "service_account",
-  "project_id": "inventory-carton",
-  "private_key_id": "4b3e9ffaf3651b1e6dc5dd32268931fe830ca8e8",
-  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCxXrYsWiTsQOS2\nTZGpxFF4BuWJhv7u+w7yhAcMS2gylgRftsw5HSj3MfkS/GUUi/UmY7l6tXo133tL\nUi6p6SV2JQPbQVOI/exONxnVwomznjo+E3iStI3F26jEsOpMBcB2rjvNTHtn766M\n+06pyZNmx3ZaxHvCp9tM5fvhJdIqcQFyYMPb+3hndgPL/h0luJKd6rYGBgoekewr\nklaJqBzB5jBcsQ/XgwZ1ltT6k7WRyPMDIf8z7j06Okao8wB3DrypL4W2z7wbyl8U\nEVnAeJyEcvGQ8X1zccRC7N+GVhTjF8QzCh9py1BSAsdSXuMCsmdcGfLUlOWxCB82\nLCWsfMXFAgMBAAECggEACH9xfdXUPtCPVmpr3yo9flL+Q6hsbNRGOkebgfL0RAyg\nKT48B0R8DWktZ+A85/moobU5NdO6Bxi8DyjEfSCcH6PxPs1n4blZlG1M866FXNw+\nKePgs/lU/1E2u/vxBqT1rjLZQRP/GZoIB93Nk5J0POXP/X7YojWiI8td5BglAls9\nd19z3z9baU09zd1mRlaeJ8gM6RzheIKYMnjxdz1IfHVSL4IaAaPcCvVROva3IoGQ\ni2rTG0RrJJ1Jffgp7CB4uJ+tZyZ3PMCjnRm6XvdB+Emdi8CFQvmvfEYpe/Kw4XML\n5MmO0iuMeHExU785EaTVC8X8V2s7UAz9OaWRVc/9ZQKBgQD4SjpmnHI/LE4/xYVH\nwVM37I0vPSjGRAHTJu27Et6wCKq8xaXFj1lfCKZC2VZOfDTKRH2SN5cKjxZbqr8U\nLgprmnGXGDBXPgCmaU4gQjBB88IiCC3Xm0wXLzdHCJ7E//sNeioauj3b4TlGTu7U\n8ymqJ18Jywah+r1fkLyr4EzrdwKBgQC24LUpDmPbBsuLf0RcdPuV8VnPanoTOqWj\nCVnwQEDtUeSj8W4cF7nM6vClYnXgvQ0KBJD13FG/RYIDyOsWgQGHnyEEl8Q96agH\nLQygwVvokRren7SXLrzswaUXdoSYZLwynk3kL5chzfgKgfmhu/abAQJlIbAICP6l\n68cfp/gvowKBgQD0WJiAwxXr9b5MJCa2Jxuuva1z/8xQ0jy5gGYU5M0ikGT2wcwS\nULCzRd/ZienV84ZASIcLjommaoqmS7MgOO8oViXTfIqWUP5yxs+MD5dOUIWM2F/E\n/6AycNUFowYc+Y4oBUHKa97UtSGYf7Wq/GLUgUqWaKduYURc+CO1QlhwoQKBgA/5\nrzmn7Scr/8nu0yz0dynRDJRm68UUQXXtkjK/mixhFAUSSRkhJXT2LRF1eXCpcyMl\n5PflSCraSpJEEe1EVbrgNsUs8NKrv6bo04qTeZDmZB+Aegke5xgTjnVvQAQEAMC3\nPXyqf5xPXtSkKAdt4QwHWYs2FyeMiZo674kfZjnbAoGABk08J+ntclVRBIJClhNk\n+w33lDKTuTd9/bkcuBQY1/hLui53B74V/y0BoWUfK5Wzup/eqhlhPozub+ilTl9O\nP2WsnfLkspLWJLxFZnpoO/M1OVOlGhvZaaVxmGLuhIi1+KV4QIUnAfhM+xHuIgld\nrQe9x65DN6haSSmoltHFP6k=\n-----END PRIVATE KEY-----\n",
-  "client_email": "drive-access@inventory-carton.iam.gserviceaccount.com",
-  "client_id": "106391728142192168303",
-  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-  "token_uri": "https://oauth2.googleapis.com/token",
-  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/drive-access%40inventory-carton.iam.gserviceaccount.com",
-  "universe_domain": "googleapis.com"
-};
+// **URL Web App của Google Apps Script của bạn**
+// Dán URL bạn nhận được sau khi triển khai Apps Script Web App vào đây!
+const GOOGLE_APPS_SCRIPT_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxUoGF-aVjuEXsBcM0c-NruAdFio79VyUBj-RJJR88/dev";
 
-const FOLDER_ID = '1WnyNjUm3XVa_ARM-SXFrZtEyIE6Lfehi'; // ID folder từ Google Drive
-
-// Initialize when page loads
+// Khởi tạo khi trang tải
 window.onload = function() {
     document.getElementById('roleScreen').classList.remove('hide');
     document.getElementById('mainScreen').classList.add('hide');
 };
 
-// Login functions
+// Hàm đăng nhập và hiển thị màn hình
 function showPasswordModal() {
     document.getElementById('passwordModal').style.display = 'flex';
 }
@@ -57,22 +46,22 @@ function showInventoryScreen() {
 function showMainScreen(isAdminScreen) {
     document.getElementById('roleScreen').classList.add('hide');
     document.getElementById('mainScreen').classList.remove('hide');
-    
+
     const adminControls = document.getElementById('adminControls');
     if (isAdminScreen) {
         adminControls.classList.add('show');
     } else {
         adminControls.classList.remove('show');
     }
-    
+
     document.getElementById('exportBtn').style.display = 'inline-block';
-    
-    document.getElementById('screenTitle').textContent = 
+
+    document.getElementById('screenTitle').textContent =
         isAdminScreen ? 'Màn hình Admin' : 'Màn hình Kiểm kê';
 
     const storedData = localStorage.getItem('excelData');
     const storedSavedData = localStorage.getItem('savedData');
-    
+
     if (storedData && storedSavedData) {
         originalData = JSON.parse(storedData);
         savedData = new Map(JSON.parse(storedSavedData));
@@ -86,24 +75,24 @@ function logout() {
     document.getElementById('roleScreen').classList.remove('hide');
 }
 
-// File validation
+// Hàm kiểm tra định dạng file
 function validateFile(input) {
     const file = input.files[0];
     if (file) {
         const fileType = file.type;
         const validTypes = [
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'application/vnd.ms-excel'
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+            'application/vnd.ms-excel' // .xls
         ];
-        
+
         if (!validTypes.includes(fileType)) {
             alert('Vui lòng chọn file Excel (.xlsx hoặc .xls)');
-            input.value = '';
+            input.value = ''; // Xóa file đã chọn
         }
     }
 }
 
-// Excel handling functions
+// Hàm tải file Excel
 function loadExcel() {
     if (!isAdmin) {
         alert('Bạn không có quyền thực hiện chức năng này!');
@@ -127,6 +116,7 @@ function loadExcel() {
     loadButton.textContent = 'Đang tải...';
     loadButton.disabled = true;
 
+    // Xóa dữ liệu đã lưu khi tải file mới
     savedData = new Map();
     localStorage.removeItem('savedData');
 
@@ -135,12 +125,12 @@ function loadExcel() {
         try {
             const data = new Uint8Array(e.target.result);
             workbook = XLSX.read(data, { type: 'array' });
-            
+
             const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
             originalData = XLSX.utils.sheet_to_json(firstSheet);
 
             localStorage.setItem('excelData', JSON.stringify(originalData));
-            
+
             displayData(originalData);
         } catch (error) {
             alert('Lỗi khi đọc file Excel: ' + error.message);
@@ -152,15 +142,17 @@ function loadExcel() {
     reader.readAsArrayBuffer(file);
 }
 
+// Hàm hiển thị dữ liệu lên bảng HTML
 function displayData(data) {
     if (!data || data.length === 0) {
-        alert('Không có dữ liệu trong file Excel!');
+        const tableContainer = document.getElementById('tableContainer');
+        tableContainer.innerHTML = '<p>Không có dữ liệu để hiển thị. Vui lòng tải file Excel.</p>';
         return;
     }
 
     const container = document.getElementById('tableContainer');
     let html = '<table><thead><tr>';
-    
+
     const headers = Object.keys(data[0]);
     headers.forEach(header => {
         html += `<th>${header}</th>`;
@@ -170,20 +162,22 @@ function displayData(data) {
     data.forEach((row, index) => {
         html += '<tr>';
         headers.forEach(header => {
-            html += `<td>${row[header]}</td>`;
+            // Hiển thị nội dung ô, có thể giới hạn chiều dài nếu cần
+            const cellContent = String(row[header] !== undefined ? row[header] : '');
+            html += `<td>${cellContent}</td>`;
         });
-        
+
         const savedValue = savedData.get(index);
         const value = savedValue !== undefined ? savedValue : '';
         const savedClass = savedValue !== undefined ? 'saved-value' : '';
-        
+
         html += `<td class="${savedClass}">
-            <input type="number" 
-                   class="actual-qty" 
-                   data-row="${index}" 
-                   value="${value}"
-                   onchange="handleInputChange(this)">
-            </td>`;
+                    <input type="number"
+                           class="actual-qty"
+                           data-row="${index}"
+                           value="${value}"
+                           onchange="handleInputChange(this)">
+                    </td>`;
         html += '</tr>';
     });
 
@@ -192,10 +186,11 @@ function displayData(data) {
 }
 
 function handleInputChange(input) {
-    const rowIndex = input.getAttribute('data-row');
-    input.parentElement.classList.remove('saved-value');
+    // const rowIndex = input.getAttribute('data-row'); // Không cần thiết ở đây
+    input.parentElement.classList.remove('saved-value'); // Xóa class "saved-value" khi có thay đổi
 }
 
+// Hàm lưu dữ liệu đã nhập
 function saveData() {
     if (!originalData) {
         alert('Chưa có dữ liệu để lưu!');
@@ -204,12 +199,16 @@ function saveData() {
 
     const inputs = document.getElementsByClassName('actual-qty');
     for (let input of inputs) {
-        const rowIndex = input.getAttribute('data-row');
+        const rowIndex = parseInt(input.getAttribute('data-row'));
         const value = input.value.trim();
-        
+
         if (value !== '') {
-            savedData.set(parseInt(rowIndex), value);
-            input.parentElement.classList.add('saved-value');
+            savedData.set(rowIndex, value);
+            input.parentElement.classList.add('saved-value'); // Thêm class khi lưu thành công
+        } else {
+            // Nếu người dùng xóa giá trị, cũng xóa khỏi savedData
+            savedData.delete(rowIndex);
+            input.parentElement.classList.remove('saved-value');
         }
     }
 
@@ -217,130 +216,108 @@ function saveData() {
     alert('Đã lưu dữ liệu thành công!');
 }
 
-// Export function
+
+// **Hàm xuất file Excel lên Google Drive - ĐÃ ĐƯỢC CHỈNH SỬA**
 async function exportToExcel() {
-    if (!originalData) {
-        alert('Vui lòng tải dữ liệu trước!');
+    if (!originalData || originalData.length === 0) {
+        alert('Vui lòng tải dữ liệu trước khi xuất!');
         return;
     }
 
+    const exportButton = document.getElementById('exportBtn');
+    exportButton.disabled = true;
+    exportButton.textContent = 'Đang xuất...';
+
     try {
-        const exportButton = document.getElementById('exportBtn');
-        exportButton.disabled = true;
-        exportButton.textContent = 'Đang xuất...';
-
-        // Get access token using service account
-        const accessToken = await getServiceAccountToken();
-
-        // Create Excel file
+        // Chuẩn bị dữ liệu để xuất (kết hợp dữ liệu gốc và số lượng thực tế đã lưu)
         const exportData = originalData.map((row, index) => {
-            const newRow = { ...row };
+            const newRow = { ...row }; // Tạo bản sao của hàng gốc
+            // Thêm cột 'Số lượng thực tế' vào hàng
             newRow['Số lượng thực tế'] = savedData.get(index) || '';
             return newRow;
         });
 
+        // Tạo workbook Excel mới
         const wb = XLSX.utils.book_new();
+        // Chuyển dữ liệu JSON thành sheet Excel
         const ws = XLSX.utils.json_to_sheet(exportData);
+        // Thêm sheet vào workbook với tên "Kiểm Kê"
         XLSX.utils.book_append_sheet(wb, ws, 'Kiểm Kê');
 
+        // Tạo file Excel dưới dạng một mảng byte (array buffer)
         const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-        const blob = new Blob([excelBuffer], {
-            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        });
+        // Tạo Blob từ array buffer
+        const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
 
-        // Upload to Drive
-        const metadata = {
-            name: `kiem_ke_${new Date().toLocaleString('vi-VN').replace(/[/:]/g, '_')}.xlsx`,
-            mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            parents: [FOLDER_ID]
-        };
+        // Chuyển Blob sang định dạng Base64 để gửi qua mạng
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
 
-        const form = new FormData();
-        form.append('metadata', new Blob(
-            [JSON.stringify(metadata)],
-            { type: 'application/json' }
-        ));
-        form.append('file', blob);
+        reader.onloadend = async function() {
+            // Lấy phần Base64 từ Data URL (loại bỏ "data:application/octet-stream;base64,")
+            const base64data = reader.result.split(',')[1];
+            // Tạo tên file duy nhất với ngày tháng năm và giờ phút giây
+            const filename = `kiem_ke_${new Date().toLocaleDateString('vi-VN').replace(/\//g, '-')}_${new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).replace(/:/g, '-')}.xlsx`;
 
-        const response = await fetch(
-            'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
-            {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`
-                },
-                body: form
+            // Gửi dữ liệu file Base64 lên Google Apps Script Web App
+            try {
+                const response = await fetch(GOOGLE_APPS_SCRIPT_WEB_APP_URL, {
+                    method: 'POST',
+                    mode: 'cors', // Đảm bảo rằng yêu cầu CORS được xử lý đúng
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        filename: filename,
+                        fileContent: base64data
+                    })
+                });
+
+                // Xử lý phản hồi từ Apps Script
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Upload failed on server: ${response.status} - ${errorText}`);
+                }
+
+                const result = await response.json();
+                if (result.status === "success") {
+                    console.log('File đã được tải lên Google Drive thành công:', result);
+                    alert('File đã được xuất thành công vào Google Drive!');
+                } else {
+                    // Xử lý lỗi từ Apps Script
+                    throw new Error(result.message || "Lỗi không xác định từ Google Apps Script.");
+                }
+            } catch (innerError) {
+                console.error('Lỗi khi gửi dữ liệu đến Google Apps Script:', innerError);
+                alert('Có lỗi khi tải file lên Google Drive: ' + innerError.message);
+            } finally {
+                // Đảm bảo nút được khôi phục trạng thái cuối cùng
+                exportButton.disabled = false;
+                exportButton.textContent = 'Xuất ra Excel';
             }
-        );
-
-        if (!response.ok) {
-            throw new Error('Upload failed: ' + response.statusText);
-        }
-
-        const result = await response.json();
-        console.log('File uploaded successfully:', result);
-        alert('File đã được xuất thành công vào Google Drive!');
-
+        };
     } catch (error) {
-        console.error('Error:', error);
+        console.error('Lỗi khi chuẩn bị file Excel để xuất:', error);
         alert('Có lỗi khi xuất file: ' + error.message);
-    } finally {
-        const exportButton = document.getElementById('exportBtn');
         exportButton.disabled = false;
         exportButton.textContent = 'Xuất ra Excel';
     }
 }
 
-// Service Account Authentication
-async function getServiceAccountToken() {
-    try {
-        // Create JWT claim
-        const now = Math.floor(Date.now() / 1000);
-        const claim = {
-            iss: SERVICE_ACCOUNT_CONFIG.client_email,
-            scope: 'https://www.googleapis.com/auth/drive.file',
-            aud: 'https://oauth2.googleapis.com/token',
-            exp: now + 3600,
-            iat: now
-        };
 
-        // Sign JWT
-        const signedJwt = jwt.encode(claim, SERVICE_ACCOUNT_CONFIG.private_key, 'RS256');
-
-        // Exchange JWT for access token
-        const response = await fetch('https://oauth2.googleapis.com/token', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
-            },
-            body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${signedJwt}`
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to get access token');
-        }
-
-        const data = await response.json();
-        return data.access_token;
-    } catch (error) {
-        console.error('Error getting access token:', error);
-        throw error;
-    }
-}
-
-
+// Hàm xóa dữ liệu
 function clearData() {
     if (!isAdmin) {
         alert('Bạn không có quyền thực hiện chức năng này!');
         return;
     }
 
-    if (confirm('Bạn có chắc chắn muốn xóa tất cả dữ liệu?')) {
+    if (confirm('Bạn có chắc chắn muốn xóa tất cả dữ liệu? Thao tác này không thể hoàn tác.')) {
         localStorage.clear();
         originalData = null;
         savedData = new Map();
         document.getElementById('tableContainer').innerHTML = '';
         document.getElementById('fileInput').value = '';
-        alert('Đã xóa tất cả dữ liệu!');
+        alert('Đã xóa tất cả dữ liệu thành công!');
     }
 }
