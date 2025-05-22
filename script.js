@@ -1,7 +1,7 @@
 // File: script.js
 
 // --- Cấu hình Firebase ---
-// Dán cấu hình Firebase của bạn từ Bước 1 tại đây
+// Dán cấu hình Firebase của bạn từ Firebase Console tại đây
 const firebaseConfig = {
     apiKey: "AIzaSyDtBANCJsW0Hbt9QYszXwGY05sKWbzkK3I",
     authDomain: "excelinventoryapp.firebaseapp.com",
@@ -10,21 +10,24 @@ const firebaseConfig = {
     messagingSenderId: "30371962017",
     appId: "1:30371962017:web:e0449e23ec9eb0104b24e0",
     measurementId: "G-9ENEPK7XN7"
-  };
-  
+};
 
 // Khởi tạo Firebase
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
-// const storage = firebase.storage(); // Chỉ bật nếu bạn muốn lưu trữ file Excel gốc
+// const storage = firebase.storage(); // Bỏ comment nếu bạn muốn sử dụng Firebase Storage
 
 // --- Biến toàn cục ---
 let currentRole = null; // 'admin' hoặc 'inventory'
-let productsData = []; // Dữ liệu sản phẩm hiển thị trên bảng
-let currentUserId = null; // ID của người dùng Firebase hiện tại
+let productsData = []; // Dữ liệu sản phẩm được tải từ Firestore và hiển thị trên bảng
+let currentUserId = null; // ID của người dùng Firebase hiện tại đã đăng nhập
 
-// --- DOM Elements ---
+// Email của tài khoản Admin trong Firebase Authentication
+// THAY THẾ BẰNG EMAIL ADMIN THỰC TẾ CỦA BẠN ĐÃ TẠO TRONG FIREBASE AUTH
+const ADMIN_EMAIL = "chauchikil01@gmail.com"; 
+
+// --- Tham chiếu đến các phần tử DOM ---
 const roleScreen = document.getElementById('roleScreen');
 const loginModal = document.getElementById('loginModal');
 const loginModalTitle = document.getElementById('loginModalTitle');
@@ -38,129 +41,159 @@ const fileInput = document.getElementById('fileInput');
 const tableContainer = document.getElementById('tableContainer');
 const exportBtn = document.getElementById('exportBtn');
 const saveDataBtn = document.querySelector('.save-btn');
-const logoutBtn = document.querySelector('.logout-btn');
+// const logoutBtn = document.querySelector('.logout-btn'); // Nút logout đã có onclick trong HTML
 
-// Tham chiếu đến collection trong Firestore
+// Tham chiếu đến collection 'products' trong Firestore
 const productsCollection = db.collection('products');
 
 
-// --- Chức năng xác thực và chuyển đổi màn hình ---
+// --- Hàm khởi tạo khi trang tải (khi DOM đã sẵn sàng) ---
+document.addEventListener('DOMContentLoaded', function() {
+    roleScreen.classList.remove('hide');
+    mainScreen.classList.add('hide');
+    loginModal.style.display = 'none'; // Đảm bảo modal đăng nhập bị ẩn ban đầu
+    adminControls.classList.remove('show'); // Ẩn admin controls ban đầu
+    exportBtn.classList.add('hide'); // Ẩn nút xuất ban đầu
+    saveDataBtn.classList.add('hide'); // Ẩn nút lưu ban đầu
+});
 
-// Theo dõi trạng thái xác thực
+// --- Chức năng Xác thực Người dùng và Chuyển đổi Màn hình ---
+
+// Theo dõi trạng thái xác thực của người dùng Firebase
 auth.onAuthStateChanged(user => {
     if (user) {
+        // Người dùng đã đăng nhập
         currentUserId = user.uid;
-        // Kiểm tra vai trò của người dùng nếu cần (ví dụ: thông qua Custom Claims hoặc một collection 'users')
-        // Hiện tại, chúng ta sẽ dựa vào lựa chọn ban đầu của người dùng hoặc email cụ thể
-        showMainScreen();
+        // Kiểm tra xem người dùng hiện tại có phải là Admin dựa trên email không
+        if (user.email === ADMIN_EMAIL) {
+            currentRole = 'admin';
+        } else {
+            currentRole = 'inventory';
+        }
+        console.log(`Người dùng đã đăng nhập: ${user.email}, Vai trò: ${currentRole}`);
+        showMainScreen(); // Hiển thị màn hình chính
     } else {
+        // Người dùng đã đăng xuất hoặc chưa đăng nhập
+        console.log("Người dùng đã đăng xuất hoặc chưa đăng nhập.");
         currentUserId = null;
-        logoutUI(); // Quay về màn hình đăng nhập nếu không có người dùng
+        logoutUI(); // Quay về màn hình chọn vai trò/đăng nhập
     }
 });
 
+// Hiển thị Modal Đăng nhập
 function showLoginModal(role) {
-    currentRole = role;
+    currentRole = role; // Đặt vai trò tạm thời cho phiên đăng nhập
     loginModalTitle.textContent = (role === 'admin' ? 'Đăng nhập Admin' : 'Đăng nhập Kiểm kê');
-    loginError.textContent = ''; // Xóa lỗi cũ
-    userEmailInput.value = '';
-    userPasswordInput.value = '';
-    loginModal.style.display = 'flex';
+    loginError.textContent = ''; // Xóa thông báo lỗi cũ
+    userEmailInput.value = ''; // Xóa email đã nhập
+    userPasswordInput.value = ''; // Xóa mật khẩu đã nhập
+    loginModal.style.display = 'flex'; // Hiển thị modal
 }
 
+// Đóng Modal Đăng nhập
 function closeLoginModal() {
     loginModal.style.display = 'none';
 }
 
+// Xử lý Đăng nhập
 async function handleLogin() {
-    const email = userEmailInput.value;
-    const password = userPasswordInput.value;
-    loginError.textContent = '';
+    const email = userEmailInput.value.trim();
+    const password = userPasswordInput.value.trim();
+    loginError.textContent = ''; // Xóa lỗi cũ
 
     if (!email || !password) {
-        loginError.textContent = 'Vui lòng nhập email và mật khẩu.';
+        loginError.textContent = 'Vui lòng nhập đầy đủ email và mật khẩu.';
         return;
     }
 
     try {
+        // Cố gắng đăng nhập người dùng với email và mật khẩu
         await auth.signInWithEmailAndPassword(email, password);
-        // auth.onAuthStateChanged sẽ tự động gọi showMainScreen()
-        closeLoginModal();
+        // Nếu đăng nhập thành công, auth.onAuthStateChanged sẽ tự động xử lý việc chuyển màn hình
+        closeLoginModal(); // Đóng modal
     } catch (error) {
-        console.error("Lỗi đăng nhập:", error);
+        console.error("Lỗi đăng nhập:", error.code, error.message);
         let errorMessage = 'Lỗi đăng nhập. Vui lòng thử lại.';
-        if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-            errorMessage = 'Email hoặc mật khẩu không đúng.';
-        } else if (error.code === 'auth/invalid-email') {
-            errorMessage = 'Email không hợp lệ.';
+        switch (error.code) {
+            case 'auth/user-not-found':
+            case 'auth/wrong-password':
+                errorMessage = 'Email hoặc mật khẩu không đúng.';
+                break;
+            case 'auth/invalid-email':
+                errorMessage = 'Email không hợp lệ.';
+                break;
+            case 'auth/too-many-requests':
+                errorMessage = 'Tài khoản này đã bị tạm khóa do quá nhiều lần đăng nhập không thành công. Vui lòng thử lại sau.';
+                break;
+            default:
+                errorMessage = 'Có lỗi xảy ra trong quá trình đăng nhập. Mã lỗi: ' + error.code;
         }
-        loginError.textContent = errorMessage;
+        loginError.textContent = errorMessage; // Hiển thị lỗi
     }
 }
 
+// Hiển thị màn hình chính dựa trên vai trò
 function showMainScreen() {
     roleScreen.classList.add('hide');
     mainScreen.classList.remove('hide');
 
-    // Xác định quyền Admin dựa trên email hoặc một trường trong Firestore
-    // Ví dụ đơn giản: coi một email cụ thể là Admin
-    const ADMIN_EMAIL = "chauchikil01@gmail.com"; // THAY THẾ BẰNG EMAIL ADMIN THỰC CỦA BẠN TRONG FIREBASE AUTH
-    if (auth.currentUser && auth.currentUser.email === ADMIN_EMAIL) {
-        currentRole = 'admin';
-    } else {
-        currentRole = 'inventory';
-    }
-
+    // Cập nhật hiển thị UI dựa trên vai trò
     if (currentRole === 'admin') {
-        adminControls.classList.add('show');
-        exportBtn.classList.remove('hide');
+        adminControls.classList.add('show'); // Hiển thị các nút điều khiển Admin
+        exportBtn.classList.remove('hide'); // Hiện nút Xuất Excel
         screenTitle.textContent = 'Hệ thống Kiểm kê (Admin)';
     } else {
-        adminControls.classList.remove('show');
-        exportBtn.classList.add('hide');
+        adminControls.classList.remove('show'); // Ẩn các nút điều khiển Admin
+        exportBtn.classList.add('hide'); // Ẩn nút Xuất Excel cho Kiểm kê viên
         screenTitle.textContent = 'Hệ thống Kiểm kê (Kiểm kê viên)';
     }
-    saveDataBtn.classList.remove('hide'); // Nút lưu luôn hiển thị
+    saveDataBtn.classList.remove('hide'); // Nút Lưu Dữ Liệu luôn hiển thị cho cả hai vai trò
 
-    loadDataFromFirestore(); // Tải dữ liệu từ Firestore
+    // Tải dữ liệu từ Firestore khi vào màn hình chính
+    loadDataFromFirestore();
 }
 
+// Xử lý Đăng xuất
 async function logout() {
     try {
         await auth.signOut();
-        // onAuthStateChanged sẽ tự động xử lý logoutUI()
+        // auth.onAuthStateChanged sẽ tự động gọi logoutUI() sau khi đăng xuất
     } catch (error) {
-        console.error("Lỗi đăng xuất:", error);
+        console.error("Lỗi khi đăng xuất:", error);
         alert("Lỗi khi đăng xuất. Vui lòng thử lại.");
     }
 }
 
+// Cập nhật UI khi đăng xuất
 function logoutUI() {
     currentRole = null;
     currentUserId = null;
-    productsData = []; // Xóa dữ liệu tạm thời
-    tableContainer.innerHTML = ''; // Xóa bảng
+    productsData = []; // Xóa dữ liệu cục bộ
+    tableContainer.innerHTML = ''; // Xóa bảng HTML
     fileInput.value = ''; // Reset input file
 
-    mainScreen.classList.add('hide');
-    roleScreen.classList.remove('hide');
-    adminControls.classList.remove('show');
-    exportBtn.classList.add('hide');
-    saveDataBtn.classList.add('hide');
+    mainScreen.classList.add('hide'); // Ẩn màn hình chính
+    roleScreen.classList.remove('hide'); // Hiển thị màn hình chọn vai trò
+    adminControls.classList.remove('show'); // Đảm bảo ẩn admin controls
+    exportBtn.classList.add('hide'); // Đảm bảo ẩn nút xuất
+    saveDataBtn.classList.add('hide'); // Đảm bảo ẩn nút lưu
 }
 
-// --- Xử lý tải file Excel & Lưu vào Firestore ---
+// --- Xử lý Tải File Excel và Lưu vào Firestore ---
+
+// Kiểm tra định dạng file Excel
 function validateFile(input) {
     const file = input.files[0];
     if (file) {
         const fileExtension = file.name.split('.').pop().toLowerCase();
         if (fileExtension !== 'xlsx' && fileExtension !== 'xls') {
             alert('Vui lòng chọn file Excel (.xlsx hoặc .xls).');
-            input.value = '';
+            input.value = ''; // Xóa file đã chọn
         }
     }
 }
 
+// Tải file Excel và lưu vào Firestore
 async function loadExcel() {
     if (currentRole !== 'admin') {
         alert('Bạn không có quyền thực hiện chức năng này!');
@@ -173,7 +206,8 @@ async function loadExcel() {
         return;
     }
 
-    if (productsData.length > 0 && !confirm('Tải file mới sẽ xóa tất cả dữ liệu hiện tại trong cơ sở dữ liệu. Bạn có muốn tiếp tục?')) {
+    // Xác nhận nếu có dữ liệu hiện có
+    if (productsData.length > 0 && !confirm('Tải file mới sẽ xóa TẤT CẢ dữ liệu hiện tại trong cơ sở dữ liệu Firebase và thay thế bằng dữ liệu từ file Excel này. Bạn có muốn tiếp tục?')) {
         fileInput.value = '';
         return;
     }
@@ -183,6 +217,7 @@ async function loadExcel() {
     loadButton.disabled = true;
 
     try {
+        // Đọc file Excel dưới dạng ArrayBuffer
         const data = await new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => resolve(new Uint8Array(e.target.result));
@@ -190,94 +225,128 @@ async function loadExcel() {
             reader.readAsArrayBuffer(file);
         });
 
+        // Xử lý dữ liệu Excel
         const workbook = XLSX.read(data, { type: 'array' });
         const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+        const jsonData = XLSX.utils.sheet_to_json(firstSheet); // Chuyển sheet thành JSON
 
         if (!jsonData || jsonData.length === 0) {
             alert('File Excel không có dữ liệu hoặc không đúng định dạng. Vui lòng kiểm tra file.');
             return;
         }
 
-        // Xóa dữ liệu cũ khỏi Firestore trước khi thêm mới
-        await clearFirestoreData();
+        // --- Xóa dữ liệu cũ khỏi Firestore trước khi thêm mới ---
+        console.log("Đang xóa dữ liệu cũ từ Firestore...");
+        await clearFirestoreData(false); // Gọi hàm xóa nhưng không hỏi xác nhận lại
 
-        // Thêm dữ liệu mới vào Firestore theo từng hàng
+        // --- Thêm dữ liệu mới vào Firestore theo từng hàng (sử dụng Batch) ---
+        console.log("Đang thêm dữ liệu mới vào Firestore...");
         const batch = db.batch();
         jsonData.forEach((row, index) => {
-            const docRef = productsCollection.doc(); // Firestore sẽ tự tạo ID
+            const docRef = productsCollection.doc(); // Firestore sẽ tự tạo ID document
             batch.set(docRef, {
-                ...row,
-                so_luong_thuc_te: 0, // Mặc định số lượng thực tế là 0 khi tải mới
-                created_at: firebase.firestore.FieldValue.serverTimestamp(),
-                updated_by: currentUserId
+                ...row, // Sao chép tất cả các trường từ Excel
+                so_luong_thuc_te: 0, // Mặc định số lượng thực tế là 0
+                created_at: firebase.firestore.FieldValue.serverTimestamp(), // Dấu thời gian tạo
+                updated_at: firebase.firestore.FieldValue.serverTimestamp(), // Dấu thời gian cập nhật
+                uploaded_by: currentUserId // ID người dùng đã tải lên
             });
         });
-        await batch.commit();
+        await batch.commit(); // Gửi batch lên Firestore
 
         alert('Đã tải dữ liệu từ Excel và lưu vào Firestore thành công!');
-        // Sau khi lưu, tải lại dữ liệu từ Firestore để hiển thị
+        // Sau khi lưu, tải lại dữ liệu từ Firestore để cập nhật giao diện
         loadDataFromFirestore();
 
     } catch (error) {
-        console.error('Lỗi khi xử lý file Excel hoặc lưu vào Firestore:', error);
+        console.error('LỖI KHI XỬ LÝ FILE EXCEL HOẶC LƯU VÀO FIRESTORE:', error);
         alert('Lỗi khi tải file Excel hoặc lưu vào Firestore: ' + error.message);
     } finally {
         loadButton.textContent = 'Tải Excel';
         loadButton.disabled = false;
-        fileInput.value = '';
+        fileInput.value = ''; // Xóa file đã chọn trong input
     }
 }
 
-// Hàm tải dữ liệu từ Firestore
+// Tải dữ liệu sản phẩm từ Firestore
 async function loadDataFromFirestore() {
     try {
-        // Lấy dữ liệu từ Firestore và sắp xếp theo một trường nào đó nếu cần
-        const snapshot = await productsCollection.get(); // Chỉ lấy tất cả
-        productsData = snapshot.docs.map(doc => ({
-            id: doc.id, // Lưu lại ID của document để cập nhật
-            ...doc.data()
-        }));
-        renderTable();
+        console.log("Bước 1: Đang cố gắng tải dữ liệu từ Firestore...");
+        // Lấy tất cả documents từ collection 'products'
+        // Có thể sắp xếp nếu bạn muốn (ví dụ: .orderBy('Mã SP'))
+        const snapshot = await productsCollection.get(); 
+
+        console.log("Bước 2: Snapshot từ Firestore đã nhận được. Số lượng tài liệu:", snapshot.docs.length);
+
+        if (snapshot.empty) {
+            console.log("Bước 3: Collection 'products' rỗng hoặc không có tài liệu nào.");
+            productsData = []; // Đảm bảo mảng rỗng
+            renderTable(); // Vẫn gọi renderTable để hiển thị thông báo "Chưa có dữ liệu"
+            return;
+        }
+
+        // Chuyển đổi snapshot thành mảng productsData
+        productsData = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id, // Lưu lại ID của document để cập nhật sau này
+                ...data     // Sao chép toàn bộ dữ liệu của document
+            };
+        });
+
+        console.log("Bước 4: Dữ liệu đã tải vào productsData:", productsData);
+        renderTable(); // Gọi hàm renderTable để hiển thị dữ liệu lên bảng
+        console.log("Bước 5: Đã gọi renderTable().");
+
     } catch (error) {
-        console.error("Lỗi khi tải dữ liệu từ Firestore:", error);
-        alert("Lỗi khi tải dữ liệu từ cơ sở dữ liệu. Vui lòng thử lại.");
+        console.error("LỖI CRITICAL KHI TẢI DỮ LIỆU TỪ FIRESTORE:", error);
+        alert("Lỗi khi tải dữ liệu từ cơ sở dữ liệu. Vui lòng kiểm tra Console để biết chi tiết.");
     }
 }
 
-// Hàm xóa toàn bộ dữ liệu sản phẩm trong Firestore
-async function clearFirestoreData() {
+// Xóa toàn bộ dữ liệu sản phẩm trong Firestore
+async function clearFirestoreData(confirmAction = true) {
     if (currentRole !== 'admin') {
         alert('Bạn không có quyền thực hiện chức năng này!');
         return;
     }
 
-    if (!confirm('Bạn có chắc chắn muốn xóa TẤT CẢ dữ liệu sản phẩm khỏi Firebase? Thao tác này không thể hoàn tác!')) {
+    if (confirmAction && !confirm('Bạn có chắc chắn muốn xóa TẤT CẢ dữ liệu sản phẩm khỏi Firebase? Thao tác này không thể hoàn tác!')) {
         return;
     }
 
     try {
         const batch = db.batch();
-        const snapshot = await productsCollection.get();
+        const snapshot = await productsCollection.get(); // Lấy tất cả documents
+
+        if (snapshot.empty) {
+            console.log("Không có dữ liệu để xóa trong Firestore.");
+            alert('Không có dữ liệu để xóa!');
+            return;
+        }
+
         snapshot.docs.forEach(doc => {
-            batch.delete(doc.ref);
+            batch.delete(doc.ref); // Đánh dấu để xóa từng document
         });
-        await batch.commit();
+        await batch.commit(); // Thực hiện xóa hàng loạt
+
         productsData = []; // Xóa dữ liệu cục bộ
-        renderTable(); // Cập nhật UI
+        renderTable(); // Cập nhật giao diện người dùng
         alert('Đã xóa tất cả dữ liệu khỏi Firebase thành công!');
+        console.log("Đã xóa tất cả dữ liệu khỏi Firestore.");
+
     } catch (error) {
-        console.error("Lỗi khi xóa dữ liệu từ Firestore:", error);
+        console.error("LỖI KHI XÓA DỮ LIỆU TỪ FIRESTORE:", error);
         alert("Lỗi khi xóa dữ liệu từ cơ sở dữ liệu: " + error.message);
     }
 }
 
-// Hàm xóa dữ liệu hiển thị (chỉ gọi clearFirestoreData())
+// Hàm gọi từ nút "Xóa Dữ Liệu" trên UI
 function clearData() {
-    clearFirestoreData();
+    clearFirestoreData(true); // Gọi hàm xóa với xác nhận
 }
 
-// Hàm lưu dữ liệu đã nhập vào Firestore
+// Lưu dữ liệu số lượng thực tế đã nhập vào Firestore
 async function saveData() {
     if (productsData.length === 0) {
         alert('Chưa có dữ liệu để lưu!');
@@ -289,28 +358,33 @@ async function saveData() {
     saveButton.disabled = true;
 
     try {
-        const batch = db.batch();
-        const inputs = tableContainer.querySelectorAll('input.actual-qty');
+        const batch = db.batch(); // Sử dụng batch để cập nhật nhiều document cùng lúc
+        const inputs = tableContainer.querySelectorAll('input.actual-qty'); // Lấy tất cả các ô input
 
         for (const input of inputs) {
-            const docId = input.dataset.docId;
-            const value = parseFloat(input.value) || 0; // Đảm bảo là số
+            const docId = input.dataset.docId; // Lấy ID document từ thuộc tính data-doc-id
+            const value = parseFloat(input.value) || 0; // Chuyển giá trị sang số, mặc định là 0 nếu không hợp lệ
 
-            const productRef = productsCollection.doc(docId);
-            batch.update(productRef, {
-                so_luong_thuc_te: value,
-                updated_at: firebase.firestore.FieldValue.serverTimestamp(),
-                updated_by: currentUserId
-            });
+            // Kiểm tra xem docId có hợp lệ không
+            if (docId) {
+                const productRef = productsCollection.doc(docId); // Tạo tham chiếu đến document
+                batch.update(productRef, {
+                    so_luong_thuc_te: value, // Cập nhật số lượng thực tế
+                    updated_at: firebase.firestore.FieldValue.serverTimestamp(), // Cập nhật thời gian
+                    updated_by: currentUserId // Cập nhật người sửa
+                });
+            } else {
+                console.warn("Cảnh báo: Không tìm thấy docId cho input:", input);
+            }
         }
-        await batch.commit();
+        await batch.commit(); // Thực hiện cập nhật hàng loạt
 
         alert('Đã lưu dữ liệu thực tế vào Firestore thành công!');
-        // Sau khi lưu, tải lại để đảm bảo trạng thái UI chính xác (ví dụ: class saved-value)
+        // Tải lại dữ liệu để cập nhật trạng thái hiển thị (ví dụ: class 'saved-value')
         loadDataFromFirestore();
 
     } catch (error) {
-        console.error("Lỗi khi lưu dữ liệu vào Firestore:", error);
+        console.error("LỖI KHI LƯU DỮ LIỆU VÀO FIRESTORE:", error);
         alert("Lỗi khi lưu dữ liệu: " + error.message);
     } finally {
         saveButton.textContent = 'Lưu Dữ Liệu';
@@ -319,9 +393,12 @@ async function saveData() {
 }
 
 
-// --- Hiển thị bảng HTML ---
+// --- Hiển thị dữ liệu lên Bảng HTML ---
 function renderTable() {
-    if (productsData.length === 0) {
+    console.log("Bước A: Đang render bảng. Dữ liệu đầu vào productsData:", productsData);
+
+    if (!productsData || productsData.length === 0) {
+        console.log("Bước B: productsData rỗng, hiển thị thông báo 'Chưa có dữ liệu'.");
         tableContainer.innerHTML = '<p style="text-align: center; margin-top: 20px;">Chưa có dữ liệu. Vui lòng tải file Excel.</p>';
         return;
     }
@@ -332,8 +409,23 @@ function renderTable() {
                 <tr>
     `;
 
-    // Tạo headers động từ các keys của đối tượng đầu tiên (trừ 'id')
-    const headers = Object.keys(productsData[0]).filter(key => key !== 'id' && key !== 'so_luong_thuc_te' && key !== 'created_at' && key !== 'updated_at' && key !== 'updated_by');
+    // Tạo headers động từ các keys của đối tượng đầu tiên, loại bỏ các trường nội bộ của Firebase
+    const firstProduct = productsData[0];
+    if (!firstProduct) {
+        console.error("LỖI: productsData có vẻ không rỗng nhưng productsData[0] là undefined. Không thể tạo header.");
+        tableContainer.innerHTML = '<p style="text-align: center; margin-top: 20px; color: red;">Lỗi hiển thị dữ liệu. Vui lòng kiểm tra Console.</p>';
+        return;
+    }
+
+    const headers = Object.keys(firstProduct).filter(key => 
+        key !== 'id' && 
+        key !== 'so_luong_thuc_te' && 
+        key !== 'created_at' && 
+        key !== 'updated_at' && 
+        key !== 'uploaded_by' // Đã đổi 'updated_by' thành 'uploaded_by' cho trường hợp tải lên ban đầu
+    );
+    console.log("Bước C: Các Headers sẽ hiển thị (từ Excel):", headers);
+
     headers.forEach(header => {
         tableHTML += `<th>${header}</th>`;
     });
@@ -345,15 +437,20 @@ function renderTable() {
     `;
 
     productsData.forEach((product) => {
+        // console.log("Bước D: Đang xử lý sản phẩm để render:", product); // Bỏ comment nếu muốn xem từng sản phẩm
+
         tableHTML += '<tr>';
+        // Hiển thị dữ liệu từ các cột Excel
         headers.forEach(header => {
             const cellContent = String(product[header] !== undefined && product[header] !== null ? product[header] : '');
             tableHTML += `<td>${cellContent}</td>`;
         });
 
+        // Hiển thị ô nhập Số Lượng Thực Tế
+        // Đã sửa lỗi chính tả: product.so_luong_thuc_te
         const actualQty = product.so_luong_thuc_te !== undefined && product.so_luong_thuc_te !== null ? product.so_luong_thuc_te : '';
-        // Kiểm tra xem số lượng thực tế có khác 0 hoặc rỗng không để thêm class saved-value
-        const savedClass = (actualQty !== '' && actualQty !== 0) ? 'saved-value' : '';
+        // Thêm class 'saved-value' nếu có giá trị khác rỗng hoặc khác 0
+        const savedClass = (actualQty !== '' && actualQty !== 0 && actualQty !== '0') ? 'saved-value' : ''; // Thêm '0' để xử lý nếu giá trị là chuỗi '0'
 
         tableHTML += `<td class="${savedClass}">
                     <input type="number"
@@ -371,17 +468,18 @@ function renderTable() {
     `;
     tableContainer.innerHTML = tableHTML;
 
-    // Gắn event listener cho các input sau khi chúng được tạo
+    // Gắn event listener cho các input sau khi chúng được tạo trong DOM
     const inputs = tableContainer.querySelectorAll('input.actual-qty');
     inputs.forEach(input => {
         input.addEventListener('input', (event) => {
-            // Khi người dùng nhập, xóa class saved-value ngay lập tức
+            // Khi người dùng nhập, xóa class 'saved-value' ngay lập tức
             event.target.parentElement.classList.remove('saved-value');
         });
     });
+    console.log("Bước E: Bảng HTML đã được render và gán vào DOM. Event listeners đã được gắn.");
 }
 
-// --- Xuất dữ liệu ra Excel và tải xuống máy (tùy chọn: có thể lưu lên Firebase Storage) ---
+// --- Xuất dữ liệu ra Excel và tải xuống máy ---
 function exportToExcel() {
     if (currentRole !== 'admin') {
         alert('Bạn không có quyền xuất dữ liệu ra Excel!');
@@ -392,47 +490,56 @@ function exportToExcel() {
         return;
     }
 
-    // Chuẩn bị dữ liệu để xuất (kết hợp các trường gốc và số lượng thực tế)
+    // Chuẩn bị dữ liệu để xuất
     const dataToExport = productsData.map(product => {
         const exportedRow = {};
-        // Lặp qua tất cả các key trừ 'id', 'created_at', 'updated_at', 'updated_by'
+        // Lặp qua tất cả các key trừ 'id', 'created_at', 'updated_at', 'uploaded_by'
         Object.keys(product).forEach(key => {
-            if (key !== 'id' && key !== 'created_at' && key !== 'updated_at' && key !== 'updated_by') {
+            if (key !== 'id' && key !== 'created_at' && key !== 'updated_at' && key !== 'uploaded_by') {
                 exportedRow[key] = product[key];
             }
         });
-        // Đảm bảo cột 'Số lượng thực tế' được thêm vào nếu nó không phải là một trong các tiêu đề gốc
-        if (!Object.prototype.hasOwnProperty.call(exportedRow, 'Số lượng thực tế')) {
+        // Đảm bảo cột 'Số lượng thực tế' được thêm vào
+        // Nó sẽ được thêm với tên đã định và không bị bỏ qua bởi filter trên
+        if (!Object.prototype.hasOwnProperty.call(exportedRow, 'so_luong_thuc_te')) {
              exportedRow['Số lượng thực tế'] = product.so_luong_thuc_te !== undefined && product.so_luong_thuc_te !== null ? product.so_luong_thuc_te : '';
         }
         return exportedRow;
     });
-
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'DuLieuKiemKe');
 
     const date = new Date();
-    const dateString = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}_${date.getHours().toString().padStart(2, '0')}${date.getMinutes().toString().padStart(2, '0')}${date.getSeconds().toString().padStart(2, '0')}`;
+    // Tạo tên file với định dạng YYYYMMDD_HHmmss
+    const dateString = `${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2, '0')}${date.getDate().toString().padStart(2, '0')}_${date.getHours().toString().padStart(2, '0')}${date.getMinutes().toString().padStart(2, '0')}${date.getSeconds().toString().padStart(2, '0')}`;
     const filename = `DuLieuKiemKe_${dateString}.xlsx`;
 
+    // Tải file Excel xuống máy tính người dùng
     XLSX.writeFile(workbook, filename);
     alert('Dữ liệu đã được xuất ra file Excel và tải về máy: ' + filename);
 
-    // Nếu bạn muốn lưu file này lên Firebase Storage, bạn sẽ cần thêm code ở đây:
+    // --- Tùy chọn: Lưu file này lên Firebase Storage ---
     /*
+    // Bỏ comment nếu bạn đã bật Firebase Storage
     const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
+    
+    // Tạo tham chiếu đến nơi bạn muốn lưu trong Storage (ví dụ: 'exports/filename.xlsx')
     const storageRef = storage.ref().child(`exports/${filename}`);
+    
+    // Bắt đầu quá trình tải lên
     storageRef.put(blob).then(snapshot => {
-        console.log('Uploaded to Firebase Storage!', snapshot);
+        console.log('File đã được tải lên Firebase Storage thành công!', snapshot);
         snapshot.ref.getDownloadURL().then(url => {
-            console.log('Download URL:', url);
-            // Có thể lưu URL này vào Firestore nếu muốn
+            console.log('URL tải xuống:', url);
+            // Bạn có thể lưu URL này vào Firestore nếu muốn lưu lại lịch sử xuất file
+            // Ví dụ: db.collection('exports_log').add({ filename: filename, url: url, exported_at: firebase.firestore.FieldValue.serverTimestamp(), exported_by: currentUserId });
         });
     }).catch(error => {
-        console.error('Error uploading to Firebase Storage:', error);
+        console.error('Lỗi khi tải file lên Firebase Storage:', error);
+        alert('Có lỗi khi tải file lên Firebase Storage: ' + error.message);
     });
     */
 }
