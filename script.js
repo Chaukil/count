@@ -293,53 +293,41 @@ async function exportToExcel() {
 
 // Service Account Authentication
 async function getServiceAccountToken() {
-    const now = Math.floor(Date.now() / 1000);
-    const jwt = {
-        iss: SERVICE_ACCOUNT_CONFIG.client_email,
-        scope: 'https://www.googleapis.com/auth/drive.file',
-        aud: 'https://oauth2.googleapis.com/token',
-        exp: now + 3600,
-        iat: now
-    };
+    try {
+        // Create JWT claim
+        const now = Math.floor(Date.now() / 1000);
+        const claim = {
+            iss: SERVICE_ACCOUNT_CONFIG.client_email,
+            scope: 'https://www.googleapis.com/auth/drive.file',
+            aud: 'https://oauth2.googleapis.com/token',
+            exp: now + 3600,
+            iat: now
+        };
 
-    const header = {
-        alg: 'RS256',
-        typ: 'JWT'
-    };
+        // Sign JWT
+        const signedJwt = jwt.encode(claim, SERVICE_ACCOUNT_CONFIG.private_key, 'RS256');
 
-    const encodedHeader = btoa(JSON.stringify(header));
-    const encodedClaim = btoa(JSON.stringify(jwt));
-    const signInput = `${encodedHeader}.${encodedClaim}`;
+        // Exchange JWT for access token
+        const response = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${signedJwt}`
+        });
 
-    // Sign JWT
-    const key = SERVICE_ACCOUNT_CONFIG.private_key;
-    const signature = await window.crypto.subtle.sign(
-        {
-            name: 'RSASSA-PKCS1-v1_5',
-            hash: { name: 'SHA-256' },
-        },
-        key,
-        new TextEncoder().encode(signInput)
-    );
+        if (!response.ok) {
+            throw new Error('Failed to get access token');
+        }
 
-    const signedJwt = `${signInput}.${btoa(String.fromCharCode(...new Uint8Array(signature)))}`;
-
-    // Get access token
-    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${signedJwt}`
-    });
-
-    if (!tokenResponse.ok) {
-        throw new Error('Failed to get access token');
+        const data = await response.json();
+        return data.access_token;
+    } catch (error) {
+        console.error('Error getting access token:', error);
+        throw error;
     }
-
-    const tokenData = await tokenResponse.json();
-    return tokenData.access_token;
 }
+
 
 function clearData() {
     if (!isAdmin) {
