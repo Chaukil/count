@@ -1,23 +1,27 @@
-// File: script.js
+// File: script.js (Không thay đổi so với phiên bản trước đó của tôi)
 
 // Constants and Variables
 let isAdmin = false;
-const ADMIN_PASSWORD = '123'; // Vẫn giữ nguyên mật khẩu Admin
+const ADMIN_PASSWORD = '123';
 let workbook = null;
-let originalData = null;
-let savedData = new Map();
+let originalData = null; // Dữ liệu gốc từ file Excel
+let savedData = new Map(); // Dữ liệu số lượng thực tế đã nhập (RowIndex -> Value)
 
 // **URL Web App của Google Apps Script của bạn**
 // Dán URL bạn nhận được sau khi triển khai Apps Script Web App vào đây!
 const GOOGLE_APPS_SCRIPT_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwWkQc8m5h7QZrbcONTQTiwE-5kAJ--gYtqCi0R5lsXEwk22kU5jYD6VBCVKbO0wmol/exec";
 
+
 // Khởi tạo khi trang tải
-window.onload = function() {
+window.onload = async function() {
     document.getElementById('roleScreen').classList.remove('hide');
     document.getElementById('mainScreen').classList.add('hide');
+
+    // Tải dữ liệu từ Google Sheet khi ứng dụng khởi động
+    await loadDataFromGoogleSheet();
 };
 
-// Hàm đăng nhập và hiển thị màn hình
+// Hàm đăng nhập và hiển thị màn hình (giữ nguyên)
 function showPasswordModal() {
     document.getElementById('passwordModal').style.display = 'flex';
 }
@@ -54,18 +58,19 @@ function showMainScreen(isAdminScreen) {
         adminControls.classList.remove('show');
     }
 
-    document.getElementById('exportBtn').style.display = 'inline-block';
+    // Nút xuất Excel sẽ không còn cần thiết cho việc tải file nhị phân
+    // Có thể ẩn đi hoặc thay đổi chức năng
+    document.getElementById('exportBtn').style.display = 'none'; // Ẩn nút xuất Excel
 
     document.getElementById('screenTitle').textContent =
         isAdminScreen ? 'Màn hình Admin' : 'Màn hình Kiểm kê';
 
-    const storedData = localStorage.getItem('excelData');
-    const storedSavedData = localStorage.getItem('savedData');
-
-    if (storedData && storedSavedData) {
-        originalData = JSON.parse(storedData);
-        savedData = new Map(JSON.parse(storedSavedData));
+    // Dữ liệu đã được tải từ Google Sheet khi khởi động ứng dụng
+    // Bây giờ chỉ cần hiển thị nếu có
+    if (originalData) {
         displayData(originalData);
+    } else {
+        document.getElementById('tableContainer').innerHTML = '<p>Không có dữ liệu. Vui lòng tải file Excel hoặc chờ dữ liệu đồng bộ.</p>';
     }
 }
 
@@ -75,7 +80,7 @@ function logout() {
     document.getElementById('roleScreen').classList.remove('hide');
 }
 
-// Hàm kiểm tra định dạng file
+// Hàm kiểm tra định dạng file (giữ nguyên)
 function validateFile(input) {
     const file = input.files[0];
     if (file) {
@@ -92,7 +97,7 @@ function validateFile(input) {
     }
 }
 
-// Hàm tải file Excel
+// Hàm tải file Excel và lưu vào Original Data (không lưu vào localStorage nữa)
 function loadExcel() {
     if (!isAdmin) {
         alert('Bạn không có quyền thực hiện chức năng này!');
@@ -107,7 +112,7 @@ function loadExcel() {
         return;
     }
 
-    if (originalData && !confirm('Tải file mới sẽ xóa dữ liệu hiện tại. Bạn có muốn tiếp tục?')) {
+    if (originalData && !confirm('Tải file mới sẽ xóa dữ liệu gốc hiện tại trên Sheet và dữ liệu kiểm kê. Bạn có muốn tiếp tục?')) {
         fileInput.value = '';
         return;
     }
@@ -116,12 +121,11 @@ function loadExcel() {
     loadButton.textContent = 'Đang tải...';
     loadButton.disabled = true;
 
-    // Xóa dữ liệu đã lưu khi tải file mới
+    // Xóa dữ liệu đã lưu cục bộ khi tải file mới
     savedData = new Map();
-    localStorage.removeItem('savedData');
 
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = async function(e) { // Thêm async ở đây
         try {
             const data = new Uint8Array(e.target.result);
             workbook = XLSX.read(data, { type: 'array' });
@@ -129,11 +133,12 @@ function loadExcel() {
             const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
             originalData = XLSX.utils.sheet_to_json(firstSheet);
 
-            localStorage.setItem('excelData', JSON.stringify(originalData));
+            // Ghi originalData và savedData (rỗng) lên Google Sheet ngay lập tức
+            await sendDataToGoogleSheet(originalData, savedData);
 
             displayData(originalData);
         } catch (error) {
-            alert('Lỗi khi đọc file Excel: ' + error.message);
+            alert('Lỗi khi đọc file Excel hoặc lưu vào Sheet: ' + error.message);
         } finally {
             loadButton.textContent = 'Tải Excel';
             loadButton.disabled = false;
@@ -142,7 +147,7 @@ function loadExcel() {
     reader.readAsArrayBuffer(file);
 }
 
-// Hàm hiển thị dữ liệu lên bảng HTML
+// Hàm hiển thị dữ liệu lên bảng HTML (giữ nguyên)
 function displayData(data) {
     if (!data || data.length === 0) {
         const tableContainer = document.getElementById('tableContainer');
@@ -162,7 +167,6 @@ function displayData(data) {
     data.forEach((row, index) => {
         html += '<tr>';
         headers.forEach(header => {
-            // Hiển thị nội dung ô, có thể giới hạn chiều dài nếu cần
             const cellContent = String(row[header] !== undefined ? row[header] : '');
             html += `<td>${cellContent}</td>`;
         });
@@ -186,133 +190,147 @@ function displayData(data) {
 }
 
 function handleInputChange(input) {
-    // const rowIndex = input.getAttribute('data-row'); // Không cần thiết ở đây
-    input.parentElement.classList.remove('saved-value'); // Xóa class "saved-value" khi có thay đổi
+    input.parentElement.classList.remove('saved-value');
 }
 
-// Hàm lưu dữ liệu đã nhập
-function saveData() {
+// Hàm lưu dữ liệu đã nhập và gửi lên Google Sheet
+async function saveData() {
     if (!originalData) {
         alert('Chưa có dữ liệu để lưu!');
         return;
     }
 
     const inputs = document.getElementsByClassName('actual-qty');
+    const tempSavedData = new Map(); // Dữ liệu tạm thời để cập nhật savedData và gửi đi
+
     for (let input of inputs) {
         const rowIndex = parseInt(input.getAttribute('data-row'));
         const value = input.value.trim();
 
         if (value !== '') {
-            savedData.set(rowIndex, value);
-            input.parentElement.classList.add('saved-value'); // Thêm class khi lưu thành công
+            tempSavedData.set(rowIndex, value);
+            input.parentElement.classList.add('saved-value');
         } else {
-            // Nếu người dùng xóa giá trị, cũng xóa khỏi savedData
-            savedData.delete(rowIndex);
             input.parentElement.classList.remove('saved-value');
         }
     }
+    savedData = tempSavedData; // Cập nhật savedData toàn cục
 
-    localStorage.setItem('savedData', JSON.stringify([...savedData]));
-    alert('Đã lưu dữ liệu thành công!');
+    await sendDataToGoogleSheet(originalData, savedData); // Gửi cả originalData và savedData
 }
 
-
-// **Hàm xuất file Excel lên Google Drive - ĐÃ ĐƯỢC CHỈNH SỬA**
-async function exportToExcel() {
-    if (!originalData || originalData.length === 0) {
-        alert('Vui lòng tải dữ liệu trước khi xuất!');
-        return;
+// Hàm gửi dữ liệu lên Google Sheet qua Apps Script
+async function sendDataToGoogleSheet(original, saved) {
+    const saveButton = document.querySelector('button[onclick="saveData()"]');
+    if (saveButton) { // Kiểm tra nếu nút "Lưu Dữ Liệu" tồn tại
+        saveButton.disabled = true;
+        saveButton.textContent = 'Đang lưu...';
+    } else { // Nếu gọi từ loadExcel, thì dùng nút tải Excel
+        const loadButton = document.querySelector('button[onclick="loadExcel()"]');
+        if (loadButton) {
+            loadButton.disabled = true;
+            loadButton.textContent = 'Đang lưu...';
+        }
     }
 
-    const exportButton = document.getElementById('exportBtn');
-    exportButton.disabled = true;
-    exportButton.textContent = 'Đang xuất...';
 
     try {
-        // Chuẩn bị dữ liệu để xuất (kết hợp dữ liệu gốc và số lượng thực tế đã lưu)
-        const exportData = originalData.map((row, index) => {
-            const newRow = { ...row }; // Tạo bản sao của hàng gốc
-            newRow['Số lượng thực tế'] = savedData.get(index) || '';
-            return newRow;
+        const response = await fetch(GOOGLE_APPS_SCRIPT_WEB_APP_URL, {
+            method: 'POST',
+            mode: 'cors',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                action: "saveData", // Cho biết hành động là lưu dữ liệu
+                originalData: original,
+                // Chuyển Map thành mảng các cặp key-value để gửi qua JSON
+                savedData: Array.from(saved.entries())
+            })
         });
 
-        // Tạo workbook Excel mới
-        const wb = XLSX.utils.book_new();
-        const ws = XLSX.utils.json_to_sheet(exportData);
-        XLSX.utils.book_append_sheet(wb, ws, 'Kiểm Kê');
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Lỗi từ server: ${response.status} - ${errorText}`);
+        }
 
-        const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-        const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
-
-        const reader = new FileReader();
-        reader.readAsDataURL(blob);
-
-        reader.onloadend = function() {
-            const base64data = reader.result.split(',')[1];
-            const filename = `kiem_ke_${new Date().toLocaleDateString('vi-VN').replace(/\//g, '-')}_${new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).replace(/:/g, '-')}.xlsx`;
-
-            // **Sử dụng XMLHttpRequest thay vì fetch**
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', GOOGLE_APPS_SCRIPT_WEB_APP_URL, true);
-            xhr.setRequestHeader('Content-Type', 'application/json');
-
-            xhr.onload = function() {
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    try {
-                        const result = JSON.parse(xhr.responseText);
-                        if (result.status === "success") {
-                            console.log('File đã được tải lên Google Drive thành công:', result);
-                            alert('File đã được xuất thành công vào Google Drive!');
-                        } else {
-                            alert('Có lỗi từ Google Apps Script: ' + (result.message || "Lỗi không xác định."));
-                        }
-                    } catch (parseError) {
-                        console.error('Lỗi phân tích phản hồi JSON:', parseError, 'Phản hồi:', xhr.responseText);
-                        alert('Có lỗi khi xử lý phản hồi từ server.');
-                    }
-                } else {
-                    console.error('Lỗi khi gửi dữ liệu đến Google Apps Script (XHR Status):', xhr.status, xhr.statusText, xhr.responseText);
-                    alert('Có lỗi khi tải file lên Google Drive. Status: ' + xhr.status);
-                }
-                exportButton.disabled = false;
-                exportButton.textContent = 'Xuất ra Excel';
-            };
-
-            xhr.onerror = function() {
-                console.error('Lỗi mạng hoặc CORS (XHR onerror): Không thể kết nối đến Google Apps Script Web App.', xhr);
-                alert('Lỗi mạng hoặc CORS: Không thể tải file lên Google Drive.');
-                exportButton.disabled = false;
-                exportButton.textContent = 'Xuất ra Excel';
-            };
-
-            xhr.send(JSON.stringify({
-                filename: filename,
-                fileContent: base64data
-            }));
-        };
-
+        const result = await response.json();
+        if (result.status === "success") {
+            console.log('Dữ liệu đã được lưu và đồng bộ lên Google Sheet:', result);
+            alert('Đã lưu và đồng bộ dữ liệu thành công!');
+        } else {
+            throw new Error(result.message || "Lỗi không xác định từ Google Apps Script.");
+        }
     } catch (error) {
-        console.error('Lỗi khi chuẩn bị file Excel để xuất:', error);
-        alert('Có lỗi khi xuất file: ' + error.message);
-        exportButton.disabled = false;
-        exportButton.textContent = 'Xuất ra Excel';
+        console.error('Lỗi khi gửi dữ liệu lên Google Sheet:', error);
+        alert('Có lỗi khi lưu hoặc đồng bộ dữ liệu: ' + error.message);
+    } finally {
+        if (saveButton) {
+            saveButton.disabled = false;
+            saveButton.textContent = 'Lưu Dữ Liệu';
+        }
+        const loadButton = document.querySelector('button[onclick="loadExcel()"]');
+        if (loadButton && loadButton.textContent === 'Đang lưu...') { // Chỉ đổi lại nếu nó đang ở trạng thái 'Đang lưu...'
+             loadButton.textContent = 'Tải Excel';
+             loadButton.disabled = false;
+        }
+    }
+}
+
+// Hàm tải dữ liệu từ Google Sheet về
+async function loadDataFromGoogleSheet() {
+    try {
+        const response = await fetch(GOOGLE_APPS_SCRIPT_WEB_APP_URL, {
+            method: 'POST', // Vẫn là POST vì doGet không được định nghĩa
+            mode: 'cors',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                action: "loadData" // Cho biết hành động là tải dữ liệu
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Lỗi khi tải dữ liệu từ server: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+        if (result.status === "success") {
+            console.log('Dữ liệu đã được tải về từ Google Sheet:', result);
+            originalData = result.originalData;
+            savedData = new Map(result.savedData); // Chuyển lại thành Map
+
+            if (document.getElementById('mainScreen').classList.contains('show')) {
+                displayData(originalData); // Chỉ hiển thị nếu mainScreen đang hiển thị
+            }
+        } else {
+            throw new Error(result.message || "Lỗi không xác định khi tải dữ liệu từ Google Sheet.");
+        }
+    } catch (error) {
+        console.error('Lỗi khi tải dữ liệu ban đầu từ Google Sheet:', error);
+        // Không alert lỗi nghiêm trọng khi khởi động, chỉ log
     }
 }
 
 
-// Hàm xóa dữ liệu
-function clearData() {
+// Hàm xóa dữ liệu (sẽ xóa cả trên Google Sheet)
+async function clearData() {
     if (!isAdmin) {
         alert('Bạn không có quyền thực hiện chức năng này!');
         return;
     }
 
-    if (confirm('Bạn có chắc chắn muốn xóa tất cả dữ liệu? Thao tác này không thể hoàn tác.')) {
-        localStorage.clear();
+    if (confirm('Bạn có chắc chắn muốn xóa tất cả dữ liệu? Thao tác này sẽ xóa trên cả Google Sheet và không thể hoàn tác.')) {
         originalData = null;
         savedData = new Map();
         document.getElementById('tableContainer').innerHTML = '';
         document.getElementById('fileInput').value = '';
+
+        // Gửi lệnh xóa lên Google Sheet bằng cách gửi dữ liệu rỗng
+        await sendDataToGoogleSheet(null, new Map()); // Gửi null cho originalData và Map rỗng cho savedData
+
         alert('Đã xóa tất cả dữ liệu thành công!');
     }
 }
