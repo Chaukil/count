@@ -4,16 +4,12 @@
     <title>Quản lý Kiểm kê Excel</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="google-site-verification" content="CW7X8XBtqgPYfPpb1CycFjeH5UBJ7DdxAcorM8M8Sc0" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsrsasign/8.0.20/jsrsasign-all-min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jwt-simple/0.5.6/jwt-simple.min.js"></script>
-    <script src="https://apis.google.com/js/api.js"></script>
-    <script src="https://accounts.google.com/gsi/client"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <!-- Màn hình chọn vai trò -->
     <div id="roleScreen" class="login-screen">
         <div class="login-container">
             <button class="role-button admin-btn" onclick="showPasswordModal()">Admin</button>
@@ -21,7 +17,6 @@
         </div>
     </div>
 
-    <!-- Modal nhập mật khẩu -->
     <div id="passwordModal" class="password-modal">
         <div class="modal-content">
             <h3>Nhập mật khẩu Admin</h3>
@@ -31,7 +26,6 @@
         </div>
     </div>
 
-    <!-- Màn hình chính -->
     <div id="mainScreen" class="hide">
         <div class="container">
             <div class="header">
@@ -58,12 +52,6 @@
     </footer>
 
     <script src="script.js"></script>
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        initializeGoogleApi();
-        gisLoaded();
-    });
-</script>
-
-</body>
+    
+    </body>
 </html>
