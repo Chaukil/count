@@ -22,6 +22,7 @@ const db = firebase.firestore();
 let currentRole = null; // 'admin' hoặc 'inventory'
 let productsData = []; // Dữ liệu sản phẩm được tải từ Firestore và hiển thị trên bảng
 let currentUserId = null; // ID của người dùng Firebase hiện tại đã đăng nhập
+let currentExcelHeaders = []; // Mảng chứa các tiêu đề cột từ file Excel đã tải lên cuối cùng
 
 // Email của tài khoản Admin trong Firebase Authentication
 // THAY THẾ BẰNG EMAIL ADMIN THỰC TẾ CỦA BẠN ĐÃ TẠO TRONG FIREBASE AUTH
@@ -43,8 +44,9 @@ const exportBtn = document.getElementById('exportBtn');
 const saveDataBtn = document.querySelector('.save-btn');
 // const logoutBtn = document.querySelector('.logout-btn'); // Nút logout đã có onclick trong HTML
 
-// Tham chiếu đến collection 'products' trong Firestore
+// Tham chiếu đến collection 'products' và document 'tableHeaders' trong Firestore
 const productsCollection = db.collection('products');
+const tableStructureDoc = db.collection('settings').doc('tableHeaders');
 
 
 // --- Hàm khởi tạo khi trang tải (khi DOM đã sẵn sàng) ---
@@ -169,6 +171,7 @@ function logoutUI() {
     currentRole = null;
     currentUserId = null;
     productsData = []; // Xóa dữ liệu cục bộ
+    currentExcelHeaders = []; // Xóa headers cục bộ
     tableContainer.innerHTML = ''; // Xóa bảng HTML
     fileInput.value = ''; // Reset input file
 
@@ -207,7 +210,7 @@ async function loadExcel() {
     }
 
     // Xác nhận nếu có dữ liệu hiện có
-    if (productsData.length > 0 && !confirm('Tải file mới sẽ xóa TẤT CẢ dữ liệu hiện tại trong cơ sở dữ liệu Firebase và thay thế bằng dữ liệu từ file Excel này. Bạn có muốn tiếp tục?')) {
+    if (productsData.length > 0 && !confirm('Tải file mới sẽ xóa TẤT CẢ dữ liệu hiện tại và cấu trúc cột trong cơ sở dữ liệu Firebase. Bạn có muốn tiếp tục?')) {
         fileInput.value = '';
         return;
     }
@@ -225,28 +228,42 @@ async function loadExcel() {
             reader.readAsArrayBuffer(file);
         });
 
-        // Xử lý dữ liệu Excel
         const workbook = XLSX.read(data, { type: 'array' });
         const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(firstSheet); // Chuyển sheet thành JSON
+        
+        // Đọc header riêng biệt từ hàng đầu tiên
+        // sheet_to_json với {header: 1} trả về mảng các mảng
+        const rawData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 }); 
+        const excelHeaders = rawData[0]; // Hàng đầu tiên là headers
+        
+        // Đọc dữ liệu từ hàng thứ 2 trở đi dưới dạng JSON objects
+        const dataRows = XLSX.utils.sheet_to_json(firstSheet); 
 
-        if (!jsonData || jsonData.length === 0) {
+        if (!dataRows || dataRows.length === 0) {
             alert('File Excel không có dữ liệu hoặc không đúng định dạng. Vui lòng kiểm tra file.');
             return;
         }
 
-        // --- Xóa dữ liệu cũ khỏi Firestore trước khi thêm mới ---
-        console.log("Đang xóa dữ liệu cũ từ Firestore...");
+        // --- LƯU CẤU TRÚC HEADERS VÀO FIRESTORE ---
+        await tableStructureDoc.set({
+            headers: excelHeaders, // Lưu mảng tên các cột gốc từ Excel
+            uploaded_at: firebase.firestore.FieldValue.serverTimestamp(),
+            uploaded_by: currentUserId
+        });
+        console.log("Đã lưu cấu trúc headers vào Firestore:", excelHeaders);
+
+        // Xóa dữ liệu sản phẩm cũ khỏi Firestore
         await clearFirestoreData(false); // Gọi hàm xóa nhưng không hỏi xác nhận lại
 
-        // --- Thêm dữ liệu mới vào Firestore theo từng hàng (sử dụng Batch) ---
+        // --- Thêm dữ liệu sản phẩm mới vào Firestore theo từng hàng (sử dụng Batch) ---
         console.log("Đang thêm dữ liệu mới vào Firestore...");
         const batch = db.batch();
-        jsonData.forEach((row, index) => {
+        dataRows.forEach((row, index) => {
             const docRef = productsCollection.doc(); // Firestore sẽ tự tạo ID document
             batch.set(docRef, {
                 ...row, // Sao chép tất cả các trường từ Excel
-                so_luong_thuc_te: 0, // Mặc định số lượng thực tế là 0
+                // Đảm bảo so_luong_thuc_te là số và mặc định là 0 nếu không có hoặc không hợp lệ
+                so_luong_thuc_te: row.hasOwnProperty('so_luong_thuc_te') ? parseFloat(row.so_luong_thuc_te) || 0 : 0, 
                 created_at: firebase.firestore.FieldValue.serverTimestamp(), // Dấu thời gian tạo
                 updated_at: firebase.firestore.FieldValue.serverTimestamp(), // Dấu thời gian cập nhật
                 uploaded_by: currentUserId // ID người dùng đã tải lên
@@ -255,7 +272,7 @@ async function loadExcel() {
         await batch.commit(); // Gửi batch lên Firestore
 
         alert('Đã tải dữ liệu từ Excel và lưu vào Firestore thành công!');
-        // Sau khi lưu, tải lại dữ liệu từ Firestore để cập nhật giao diện
+        // Sau khi lưu, tải lại dữ liệu và cấu trúc header để cập nhật giao diện
         loadDataFromFirestore();
 
     } catch (error) {
@@ -268,18 +285,27 @@ async function loadExcel() {
     }
 }
 
-// Tải dữ liệu sản phẩm từ Firestore
+// Tải dữ liệu sản phẩm và cấu trúc headers từ Firestore
 async function loadDataFromFirestore() {
     try {
-        console.log("Bước 1: Đang cố gắng tải dữ liệu từ Firestore...");
+        console.log("Bước 1: Đang cố gắng tải cấu trúc headers từ Firestore...");
+        const headersSnapshot = await tableStructureDoc.get();
+        if (headersSnapshot.exists) {
+            currentExcelHeaders = headersSnapshot.data().headers || [];
+            console.log("Bước 2: Đã tải cấu trúc headers:", currentExcelHeaders);
+        } else {
+            console.warn("Không tìm thấy cấu trúc headers trong Firestore. Vui lòng tải một file Excel.");
+            currentExcelHeaders = []; // Đảm bảo mảng rỗng nếu không có headers
+        }
+
+        console.log("Bước 3: Đang tải dữ liệu sản phẩm từ Firestore...");
         // Lấy tất cả documents từ collection 'products'
-        // Có thể sắp xếp nếu bạn muốn (ví dụ: .orderBy('Mã SP'))
         const snapshot = await productsCollection.get(); 
 
-        console.log("Bước 2: Snapshot từ Firestore đã nhận được. Số lượng tài liệu:", snapshot.docs.length);
+        console.log("Bước 4: Snapshot dữ liệu sản phẩm đã nhận được. Số lượng tài liệu:", snapshot.docs.length);
 
         if (snapshot.empty) {
-            console.log("Bước 3: Collection 'products' rỗng hoặc không có tài liệu nào.");
+            console.log("Bước 5: Collection 'products' rỗng hoặc không có tài liệu nào.");
             productsData = []; // Đảm bảo mảng rỗng
             renderTable(); // Vẫn gọi renderTable để hiển thị thông báo "Chưa có dữ liệu"
             return;
@@ -294,9 +320,9 @@ async function loadDataFromFirestore() {
             };
         });
 
-        console.log("Bước 4: Dữ liệu đã tải vào productsData:", productsData);
+        console.log("Bước 6: Dữ liệu sản phẩm đã tải vào productsData:", productsData);
         renderTable(); // Gọi hàm renderTable để hiển thị dữ liệu lên bảng
-        console.log("Bước 5: Đã gọi renderTable().");
+        console.log("Bước 7: Đã gọi renderTable().");
 
     } catch (error) {
         console.error("LỖI CRITICAL KHI TẢI DỮ LIỆU TỪ FIRESTORE:", error);
@@ -396,9 +422,9 @@ async function saveData() {
 // --- Hiển thị dữ liệu lên Bảng HTML ---
 function renderTable() {
     console.log("Bước A: Đang render bảng. Dữ liệu đầu vào productsData:", productsData);
+    console.log("Sử dụng Headers đã tải:", currentExcelHeaders);
 
     if (!productsData || productsData.length === 0) {
-        console.log("Bước B: productsData rỗng, hiển thị thông báo 'Chưa có dữ liệu'.");
         tableContainer.innerHTML = '<p style="text-align: center; margin-top: 20px;">Chưa có dữ liệu. Vui lòng tải file Excel.</p>';
         return;
     }
@@ -409,24 +435,22 @@ function renderTable() {
                 <tr>
     `;
 
-    // Tạo headers động từ các keys của đối tượng đầu tiên, loại bỏ các trường nội bộ của Firebase
-    const firstProduct = productsData[0];
-    if (!firstProduct) {
-        console.error("LỖI: productsData có vẻ không rỗng nhưng productsData[0] là undefined. Không thể tạo header.");
-        tableContainer.innerHTML = '<p style="text-align: center; margin-top: 20px; color: red;">Lỗi hiển thị dữ liệu. Vui lòng kiểm tra Console.</p>';
-        return;
+    // Sử dụng currentExcelHeaders để tạo tiêu đề bảng và đảm bảo thứ tự
+    if (currentExcelHeaders.length === 0) {
+        // Fallback: Nếu không có headers được tải (có thể do chưa tải file excel lần nào),
+        // lấy các key từ đối tượng sản phẩm đầu tiên làm headers tạm thời
+        console.warn("Không có headers đã lưu, sử dụng các key mặc định từ dữ liệu đầu tiên.");
+        const firstProductKeys = Object.keys(productsData[0]).filter(key => 
+            key !== 'id' && 
+            key !== 'so_luong_thuc_te' && 
+            key !== 'created_at' && 
+            key !== 'updated_at' && 
+            key !== 'uploaded_by'
+        );
+        currentExcelHeaders = firstProductKeys; // Gán tạm thời để vẫn hiển thị được bảng
     }
 
-    const headers = Object.keys(firstProduct).filter(key => 
-        key !== 'id' && 
-        key !== 'so_luong_thuc_te' && 
-        key !== 'created_at' && 
-        key !== 'updated_at' && 
-        key !== 'uploaded_by' // Đã đổi 'updated_by' thành 'uploaded_by' cho trường hợp tải lên ban đầu
-    );
-    console.log("Bước C: Các Headers sẽ hiển thị (từ Excel):", headers);
-
-    headers.forEach(header => {
+    currentExcelHeaders.forEach(header => {
         tableHTML += `<th>${header}</th>`;
     });
     tableHTML += `
@@ -437,20 +461,18 @@ function renderTable() {
     `;
 
     productsData.forEach((product) => {
-        // console.log("Bước D: Đang xử lý sản phẩm để render:", product); // Bỏ comment nếu muốn xem từng sản phẩm
-
         tableHTML += '<tr>';
-        // Hiển thị dữ liệu từ các cột Excel
-        headers.forEach(header => {
+        // Hiển thị dữ liệu theo thứ tự headers đã lưu
+        currentExcelHeaders.forEach(header => {
+            // Đảm bảo truy cập đúng trường từ product data
             const cellContent = String(product[header] !== undefined && product[header] !== null ? product[header] : '');
             tableHTML += `<td>${cellContent}</td>`;
         });
 
         // Hiển thị ô nhập Số Lượng Thực Tế
-        // Đã sửa lỗi chính tả: product.so_luong_thuc_te
         const actualQty = product.so_luong_thuc_te !== undefined && product.so_luong_thuc_te !== null ? product.so_luong_thuc_te : '';
         // Thêm class 'saved-value' nếu có giá trị khác rỗng hoặc khác 0
-        const savedClass = (actualQty !== '' && actualQty !== 0 && actualQty !== '0') ? 'saved-value' : ''; // Thêm '0' để xử lý nếu giá trị là chuỗi '0'
+        const savedClass = (actualQty !== '' && actualQty !== 0 && actualQty !== '0') ? 'saved-value' : ''; 
 
         tableHTML += `<td class="${savedClass}">
                     <input type="number"
@@ -489,21 +511,23 @@ function exportToExcel() {
         alert('Không có dữ liệu để xuất ra Excel!');
         return;
     }
+    
+    // Đảm bảo có headers để xuất
+    if (currentExcelHeaders.length === 0) {
+        alert('Không tìm thấy cấu trúc cột để xuất. Vui lòng tải một file Excel trước.');
+        return;
+    }
 
-    // Chuẩn bị dữ liệu để xuất
     const dataToExport = productsData.map(product => {
         const exportedRow = {};
-        // Lặp qua tất cả các key trừ 'id', 'created_at', 'updated_at', 'uploaded_by'
-        Object.keys(product).forEach(key => {
-            if (key !== 'id' && key !== 'created_at' && key !== 'updated_at' && key !== 'uploaded_by') {
-                exportedRow[key] = product[key];
-            }
+        // Lặp qua các headers đã lưu để đảm bảo đúng thứ tự và chỉ các cột mong muốn
+        currentExcelHeaders.forEach(header => {
+            // Gán giá trị của cột đó từ dữ liệu sản phẩm
+            exportedRow[header] = product[header] !== undefined && product[header] !== null ? product[header] : '';
         });
-        // Đảm bảo cột 'Số lượng thực tế' được thêm vào
-        // Nó sẽ được thêm với tên đã định và không bị bỏ qua bởi filter trên
-        if (!Object.prototype.hasOwnProperty.call(exportedRow, 'so_luong_thuc_te')) {
-             exportedRow['Số lượng thực tế'] = product.so_luong_thuc_te !== undefined && product.so_luong_thuc_te !== null ? product.so_luong_thuc_te : '';
-        }
+
+        // Luôn thêm cột "Số lượng thực tế" vào cuối cùng của file xuất ra
+        exportedRow['Số lượng thực tế'] = product.so_luong_thuc_te !== undefined && product.so_luong_thuc_te !== null ? product.so_luong_thuc_te : '';
         return exportedRow;
     });
 
@@ -522,7 +546,7 @@ function exportToExcel() {
 
     // --- Tùy chọn: Lưu file này lên Firebase Storage ---
     /*
-    // Bỏ comment nếu bạn đã bật Firebase Storage
+    // Bỏ comment nếu bạn đã bật Firebase Storage trong dự án Firebase
     const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
     
