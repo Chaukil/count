@@ -233,7 +233,7 @@ async function loadExcel() {
 async function loadDataFromFirestore() {
     try {
         // Lấy dữ liệu từ Firestore và sắp xếp theo một trường nào đó nếu cần
-        const snapshot = await productsCollection.orderBy('Mã SP' || 'ten_san_pham').get();
+        const snapshot = await productsCollection.get(); // Chỉ lấy tất cả
         productsData = snapshot.docs.map(doc => ({
             id: doc.id, // Lưu lại ID của document để cập nhật
             ...doc.data()
