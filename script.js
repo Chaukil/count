@@ -1,118 +1,179 @@
-// File: script.js (Không thay đổi so với phiên bản trước đó của tôi)
+// File: script.js
 
-// Constants and Variables
-let isAdmin = false;
-const ADMIN_PASSWORD = '123';
-let workbook = null;
-let originalData = null; // Dữ liệu gốc từ file Excel
-let savedData = new Map(); // Dữ liệu số lượng thực tế đã nhập (RowIndex -> Value)
+// --- Cấu hình Firebase ---
+// Dán cấu hình Firebase của bạn từ Bước 1 tại đây
+const firebaseConfig = {
+    apiKey: "AIzaSyDtBANCJsW0Hbt9QYszXwGY05sKWbzkK3I",
+    authDomain: "excelinventoryapp.firebaseapp.com",
+    projectId: "excelinventoryapp",
+    storageBucket: "excelinventoryapp.firebasestorage.app",
+    messagingSenderId: "30371962017",
+    appId: "1:30371962017:web:e0449e23ec9eb0104b24e0",
+    measurementId: "G-9ENEPK7XN7"
+  };
+  
 
-// **URL Web App của Google Apps Script của bạn**
-// Dán URL bạn nhận được sau khi triển khai Apps Script Web App vào đây!
-const GOOGLE_APPS_SCRIPT_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwWkQc8m5h7QZrbcONTQTiwE-5kAJ--gYtqCi0R5lsXEwk22kU5jYD6VBCVKbO0wmol/exec";
+// Khởi tạo Firebase
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+// const storage = firebase.storage(); // Chỉ bật nếu bạn muốn lưu trữ file Excel gốc
+
+// --- Biến toàn cục ---
+let currentRole = null; // 'admin' hoặc 'inventory'
+let productsData = []; // Dữ liệu sản phẩm hiển thị trên bảng
+let currentUserId = null; // ID của người dùng Firebase hiện tại
+
+// --- DOM Elements ---
+const roleScreen = document.getElementById('roleScreen');
+const loginModal = document.getElementById('loginModal');
+const loginModalTitle = document.getElementById('loginModalTitle');
+const userEmailInput = document.getElementById('userEmail');
+const userPasswordInput = document.getElementById('userPassword');
+const loginError = document.getElementById('loginError');
+const mainScreen = document.getElementById('mainScreen');
+const screenTitle = document.getElementById('screenTitle');
+const adminControls = document.getElementById('adminControls');
+const fileInput = document.getElementById('fileInput');
+const tableContainer = document.getElementById('tableContainer');
+const exportBtn = document.getElementById('exportBtn');
+const saveDataBtn = document.querySelector('.save-btn');
+const logoutBtn = document.querySelector('.logout-btn');
+
+// Tham chiếu đến collection trong Firestore
+const productsCollection = db.collection('products');
 
 
-// Khởi tạo khi trang tải
-window.onload = async function() {
-    document.getElementById('roleScreen').classList.remove('hide');
-    document.getElementById('mainScreen').classList.add('hide');
+// --- Chức năng xác thực và chuyển đổi màn hình ---
 
-    // Tải dữ liệu từ Google Sheet khi ứng dụng khởi động
-    await loadDataFromGoogleSheet();
-};
-
-// Hàm đăng nhập và hiển thị màn hình (giữ nguyên)
-function showPasswordModal() {
-    document.getElementById('passwordModal').style.display = 'flex';
-}
-
-function closePasswordModal() {
-    document.getElementById('passwordModal').style.display = 'none';
-    document.getElementById('adminPassword').value = '';
-}
-
-function checkPassword() {
-    const password = document.getElementById('adminPassword').value;
-    if (password === ADMIN_PASSWORD) {
-        isAdmin = true;
-        showMainScreen(true);
-        closePasswordModal();
+// Theo dõi trạng thái xác thực
+auth.onAuthStateChanged(user => {
+    if (user) {
+        currentUserId = user.uid;
+        // Kiểm tra vai trò của người dùng nếu cần (ví dụ: thông qua Custom Claims hoặc một collection 'users')
+        // Hiện tại, chúng ta sẽ dựa vào lựa chọn ban đầu của người dùng hoặc email cụ thể
+        showMainScreen();
     } else {
-        alert('Mật khẩu không đúng!');
+        currentUserId = null;
+        logoutUI(); // Quay về màn hình đăng nhập nếu không có người dùng
+    }
+});
+
+function showLoginModal(role) {
+    currentRole = role;
+    loginModalTitle.textContent = (role === 'admin' ? 'Đăng nhập Admin' : 'Đăng nhập Kiểm kê');
+    loginError.textContent = ''; // Xóa lỗi cũ
+    userEmailInput.value = '';
+    userPasswordInput.value = '';
+    loginModal.style.display = 'flex';
+}
+
+function closeLoginModal() {
+    loginModal.style.display = 'none';
+}
+
+async function handleLogin() {
+    const email = userEmailInput.value;
+    const password = userPasswordInput.value;
+    loginError.textContent = '';
+
+    if (!email || !password) {
+        loginError.textContent = 'Vui lòng nhập email và mật khẩu.';
+        return;
+    }
+
+    try {
+        await auth.signInWithEmailAndPassword(email, password);
+        // auth.onAuthStateChanged sẽ tự động gọi showMainScreen()
+        closeLoginModal();
+    } catch (error) {
+        console.error("Lỗi đăng nhập:", error);
+        let errorMessage = 'Lỗi đăng nhập. Vui lòng thử lại.';
+        if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+            errorMessage = 'Email hoặc mật khẩu không đúng.';
+        } else if (error.code === 'auth/invalid-email') {
+            errorMessage = 'Email không hợp lệ.';
+        }
+        loginError.textContent = errorMessage;
     }
 }
 
-function showInventoryScreen() {
-    isAdmin = false;
-    showMainScreen(false);
-}
+function showMainScreen() {
+    roleScreen.classList.add('hide');
+    mainScreen.classList.remove('hide');
 
-function showMainScreen(isAdminScreen) {
-    document.getElementById('roleScreen').classList.add('hide');
-    document.getElementById('mainScreen').classList.remove('hide');
+    // Xác định quyền Admin dựa trên email hoặc một trường trong Firestore
+    // Ví dụ đơn giản: coi một email cụ thể là Admin
+    const ADMIN_EMAIL = "admin@example.com"; // THAY THẾ BẰNG EMAIL ADMIN THỰC CỦA BẠN TRONG FIREBASE AUTH
+    if (auth.currentUser && auth.currentUser.email === ADMIN_EMAIL) {
+        currentRole = 'admin';
+    } else {
+        currentRole = 'inventory';
+    }
 
-    const adminControls = document.getElementById('adminControls');
-    if (isAdminScreen) {
+    if (currentRole === 'admin') {
         adminControls.classList.add('show');
+        exportBtn.classList.remove('hide');
+        screenTitle.textContent = 'Hệ thống Kiểm kê (Admin)';
     } else {
         adminControls.classList.remove('show');
+        exportBtn.classList.add('hide');
+        screenTitle.textContent = 'Hệ thống Kiểm kê (Kiểm kê viên)';
     }
+    saveDataBtn.classList.remove('hide'); // Nút lưu luôn hiển thị
 
-    // Nút xuất Excel sẽ không còn cần thiết cho việc tải file nhị phân
-    // Có thể ẩn đi hoặc thay đổi chức năng
-    document.getElementById('exportBtn').style.display = 'none'; // Ẩn nút xuất Excel
+    loadDataFromFirestore(); // Tải dữ liệu từ Firestore
+}
 
-    document.getElementById('screenTitle').textContent =
-        isAdminScreen ? 'Màn hình Admin' : 'Màn hình Kiểm kê';
-
-    // Dữ liệu đã được tải từ Google Sheet khi khởi động ứng dụng
-    // Bây giờ chỉ cần hiển thị nếu có
-    if (originalData) {
-        displayData(originalData);
-    } else {
-        document.getElementById('tableContainer').innerHTML = '<p>Không có dữ liệu. Vui lòng tải file Excel hoặc chờ dữ liệu đồng bộ.</p>';
+async function logout() {
+    try {
+        await auth.signOut();
+        // onAuthStateChanged sẽ tự động xử lý logoutUI()
+    } catch (error) {
+        console.error("Lỗi đăng xuất:", error);
+        alert("Lỗi khi đăng xuất. Vui lòng thử lại.");
     }
 }
 
-function logout() {
-    isAdmin = false;
-    document.getElementById('mainScreen').classList.add('hide');
-    document.getElementById('roleScreen').classList.remove('hide');
+function logoutUI() {
+    currentRole = null;
+    currentUserId = null;
+    productsData = []; // Xóa dữ liệu tạm thời
+    tableContainer.innerHTML = ''; // Xóa bảng
+    fileInput.value = ''; // Reset input file
+
+    mainScreen.classList.add('hide');
+    roleScreen.classList.remove('hide');
+    adminControls.classList.remove('show');
+    exportBtn.classList.add('hide');
+    saveDataBtn.classList.add('hide');
 }
 
-// Hàm kiểm tra định dạng file (giữ nguyên)
+// --- Xử lý tải file Excel & Lưu vào Firestore ---
 function validateFile(input) {
     const file = input.files[0];
     if (file) {
-        const fileType = file.type;
-        const validTypes = [
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
-            'application/vnd.ms-excel' // .xls
-        ];
-
-        if (!validTypes.includes(fileType)) {
-            alert('Vui lòng chọn file Excel (.xlsx hoặc .xls)');
-            input.value = ''; // Xóa file đã chọn
+        const fileExtension = file.name.split('.').pop().toLowerCase();
+        if (fileExtension !== 'xlsx' && fileExtension !== 'xls') {
+            alert('Vui lòng chọn file Excel (.xlsx hoặc .xls).');
+            input.value = '';
         }
     }
 }
 
-// Hàm tải file Excel và lưu vào Original Data (không lưu vào localStorage nữa)
-function loadExcel() {
-    if (!isAdmin) {
+async function loadExcel() {
+    if (currentRole !== 'admin') {
         alert('Bạn không có quyền thực hiện chức năng này!');
         return;
     }
 
-    const fileInput = document.getElementById('fileInput');
     const file = fileInput.files[0];
-
     if (!file) {
         alert('Vui lòng chọn file Excel!');
         return;
     }
 
-    if (originalData && !confirm('Tải file mới sẽ xóa dữ liệu gốc hiện tại trên Sheet và dữ liệu kiểm kê. Bạn có muốn tiếp tục?')) {
+    if (productsData.length > 0 && !confirm('Tải file mới sẽ xóa tất cả dữ liệu hiện tại trong cơ sở dữ liệu. Bạn có muốn tiếp tục?')) {
         fileInput.value = '';
         return;
     }
@@ -121,216 +182,257 @@ function loadExcel() {
     loadButton.textContent = 'Đang tải...';
     loadButton.disabled = true;
 
-    // Xóa dữ liệu đã lưu cục bộ khi tải file mới
-    savedData = new Map();
-
-    const reader = new FileReader();
-    reader.onload = async function(e) { // Thêm async ở đây
-        try {
-            const data = new Uint8Array(e.target.result);
-            workbook = XLSX.read(data, { type: 'array' });
-
-            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-            originalData = XLSX.utils.sheet_to_json(firstSheet);
-
-            // Ghi originalData và savedData (rỗng) lên Google Sheet ngay lập tức
-            await sendDataToGoogleSheet(originalData, savedData);
-
-            displayData(originalData);
-        } catch (error) {
-            alert('Lỗi khi đọc file Excel hoặc lưu vào Sheet: ' + error.message);
-        } finally {
-            loadButton.textContent = 'Tải Excel';
-            loadButton.disabled = false;
-        }
-    };
-    reader.readAsArrayBuffer(file);
-}
-
-// Hàm hiển thị dữ liệu lên bảng HTML (giữ nguyên)
-function displayData(data) {
-    if (!data || data.length === 0) {
-        const tableContainer = document.getElementById('tableContainer');
-        tableContainer.innerHTML = '<p>Không có dữ liệu để hiển thị. Vui lòng tải file Excel.</p>';
-        return;
-    }
-
-    const container = document.getElementById('tableContainer');
-    let html = '<table><thead><tr>';
-
-    const headers = Object.keys(data[0]);
-    headers.forEach(header => {
-        html += `<th>${header}</th>`;
-    });
-    html += '<th>Số Lượng Thực Tế</th></tr></thead><tbody>';
-
-    data.forEach((row, index) => {
-        html += '<tr>';
-        headers.forEach(header => {
-            const cellContent = String(row[header] !== undefined ? row[header] : '');
-            html += `<td>${cellContent}</td>`;
-        });
-
-        const savedValue = savedData.get(index);
-        const value = savedValue !== undefined ? savedValue : '';
-        const savedClass = savedValue !== undefined ? 'saved-value' : '';
-
-        html += `<td class="${savedClass}">
-                    <input type="number"
-                           class="actual-qty"
-                           data-row="${index}"
-                           value="${value}"
-                           onchange="handleInputChange(this)">
-                    </td>`;
-        html += '</tr>';
-    });
-
-    html += '</tbody></table>';
-    container.innerHTML = html;
-}
-
-function handleInputChange(input) {
-    input.parentElement.classList.remove('saved-value');
-}
-
-// Hàm lưu dữ liệu đã nhập và gửi lên Google Sheet
-async function saveData() {
-    if (!originalData) {
-        alert('Chưa có dữ liệu để lưu!');
-        return;
-    }
-
-    const inputs = document.getElementsByClassName('actual-qty');
-    const tempSavedData = new Map(); // Dữ liệu tạm thời để cập nhật savedData và gửi đi
-
-    for (let input of inputs) {
-        const rowIndex = parseInt(input.getAttribute('data-row'));
-        const value = input.value.trim();
-
-        if (value !== '') {
-            tempSavedData.set(rowIndex, value);
-            input.parentElement.classList.add('saved-value');
-        } else {
-            input.parentElement.classList.remove('saved-value');
-        }
-    }
-    savedData = tempSavedData; // Cập nhật savedData toàn cục
-
-    await sendDataToGoogleSheet(originalData, savedData); // Gửi cả originalData và savedData
-}
-
-// Hàm gửi dữ liệu lên Google Sheet qua Apps Script
-async function sendDataToGoogleSheet(original, saved) {
-    const saveButton = document.querySelector('button[onclick="saveData()"]');
-    if (saveButton) { // Kiểm tra nếu nút "Lưu Dữ Liệu" tồn tại
-        saveButton.disabled = true;
-        saveButton.textContent = 'Đang lưu...';
-    } else { // Nếu gọi từ loadExcel, thì dùng nút tải Excel
-        const loadButton = document.querySelector('button[onclick="loadExcel()"]');
-        if (loadButton) {
-            loadButton.disabled = true;
-            loadButton.textContent = 'Đang lưu...';
-        }
-    }
-
-
     try {
-        const response = await fetch(GOOGLE_APPS_SCRIPT_WEB_APP_URL, {
-            method: 'POST',
-            mode: 'cors',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                action: "saveData", // Cho biết hành động là lưu dữ liệu
-                originalData: original,
-                // Chuyển Map thành mảng các cặp key-value để gửi qua JSON
-                savedData: Array.from(saved.entries())
-            })
+        const data = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(new Uint8Array(e.target.result));
+            reader.onerror = (e) => reject(e);
+            reader.readAsArrayBuffer(file);
         });
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Lỗi từ server: ${response.status} - ${errorText}`);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+
+        if (!jsonData || jsonData.length === 0) {
+            alert('File Excel không có dữ liệu hoặc không đúng định dạng. Vui lòng kiểm tra file.');
+            return;
         }
 
-        const result = await response.json();
-        if (result.status === "success") {
-            console.log('Dữ liệu đã được lưu và đồng bộ lên Google Sheet:', result);
-            alert('Đã lưu và đồng bộ dữ liệu thành công!');
-        } else {
-            throw new Error(result.message || "Lỗi không xác định từ Google Apps Script.");
-        }
+        // Xóa dữ liệu cũ khỏi Firestore trước khi thêm mới
+        await clearFirestoreData();
+
+        // Thêm dữ liệu mới vào Firestore theo từng hàng
+        const batch = db.batch();
+        jsonData.forEach((row, index) => {
+            const docRef = productsCollection.doc(); // Firestore sẽ tự tạo ID
+            batch.set(docRef, {
+                ...row,
+                so_luong_thuc_te: 0, // Mặc định số lượng thực tế là 0 khi tải mới
+                created_at: firebase.firestore.FieldValue.serverTimestamp(),
+                updated_by: currentUserId
+            });
+        });
+        await batch.commit();
+
+        alert('Đã tải dữ liệu từ Excel và lưu vào Firestore thành công!');
+        // Sau khi lưu, tải lại dữ liệu từ Firestore để hiển thị
+        loadDataFromFirestore();
+
     } catch (error) {
-        console.error('Lỗi khi gửi dữ liệu lên Google Sheet:', error);
-        alert('Có lỗi khi lưu hoặc đồng bộ dữ liệu: ' + error.message);
+        console.error('Lỗi khi xử lý file Excel hoặc lưu vào Firestore:', error);
+        alert('Lỗi khi tải file Excel hoặc lưu vào Firestore: ' + error.message);
     } finally {
-        if (saveButton) {
-            saveButton.disabled = false;
-            saveButton.textContent = 'Lưu Dữ Liệu';
-        }
-        const loadButton = document.querySelector('button[onclick="loadExcel()"]');
-        if (loadButton && loadButton.textContent === 'Đang lưu...') { // Chỉ đổi lại nếu nó đang ở trạng thái 'Đang lưu...'
-             loadButton.textContent = 'Tải Excel';
-             loadButton.disabled = false;
-        }
+        loadButton.textContent = 'Tải Excel';
+        loadButton.disabled = false;
+        fileInput.value = '';
     }
 }
 
-// Hàm tải dữ liệu từ Google Sheet về
-async function loadDataFromGoogleSheet() {
+// Hàm tải dữ liệu từ Firestore
+async function loadDataFromFirestore() {
     try {
-        const response = await fetch(GOOGLE_APPS_SCRIPT_WEB_APP_URL, {
-            method: 'POST', // Vẫn là POST vì doGet không được định nghĩa
-            mode: 'cors',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                action: "loadData" // Cho biết hành động là tải dữ liệu
-            })
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Lỗi khi tải dữ liệu từ server: ${response.status} - ${errorText}`);
-        }
-
-        const result = await response.json();
-        if (result.status === "success") {
-            console.log('Dữ liệu đã được tải về từ Google Sheet:', result);
-            originalData = result.originalData;
-            savedData = new Map(result.savedData); // Chuyển lại thành Map
-
-            if (document.getElementById('mainScreen').classList.contains('show')) {
-                displayData(originalData); // Chỉ hiển thị nếu mainScreen đang hiển thị
-            }
-        } else {
-            throw new Error(result.message || "Lỗi không xác định khi tải dữ liệu từ Google Sheet.");
-        }
+        // Lấy dữ liệu từ Firestore và sắp xếp theo một trường nào đó nếu cần
+        const snapshot = await productsCollection.orderBy('Mã SP' || 'ten_san_pham').get();
+        productsData = snapshot.docs.map(doc => ({
+            id: doc.id, // Lưu lại ID của document để cập nhật
+            ...doc.data()
+        }));
+        renderTable();
     } catch (error) {
-        console.error('Lỗi khi tải dữ liệu ban đầu từ Google Sheet:', error);
-        // Không alert lỗi nghiêm trọng khi khởi động, chỉ log
+        console.error("Lỗi khi tải dữ liệu từ Firestore:", error);
+        alert("Lỗi khi tải dữ liệu từ cơ sở dữ liệu. Vui lòng thử lại.");
     }
 }
 
-
-// Hàm xóa dữ liệu (sẽ xóa cả trên Google Sheet)
-async function clearData() {
-    if (!isAdmin) {
+// Hàm xóa toàn bộ dữ liệu sản phẩm trong Firestore
+async function clearFirestoreData() {
+    if (currentRole !== 'admin') {
         alert('Bạn không có quyền thực hiện chức năng này!');
         return;
     }
 
-    if (confirm('Bạn có chắc chắn muốn xóa tất cả dữ liệu? Thao tác này sẽ xóa trên cả Google Sheet và không thể hoàn tác.')) {
-        originalData = null;
-        savedData = new Map();
-        document.getElementById('tableContainer').innerHTML = '';
-        document.getElementById('fileInput').value = '';
-
-        // Gửi lệnh xóa lên Google Sheet bằng cách gửi dữ liệu rỗng
-        await sendDataToGoogleSheet(null, new Map()); // Gửi null cho originalData và Map rỗng cho savedData
-
-        alert('Đã xóa tất cả dữ liệu thành công!');
+    if (!confirm('Bạn có chắc chắn muốn xóa TẤT CẢ dữ liệu sản phẩm khỏi Firebase? Thao tác này không thể hoàn tác!')) {
+        return;
     }
+
+    try {
+        const batch = db.batch();
+        const snapshot = await productsCollection.get();
+        snapshot.docs.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+        await batch.commit();
+        productsData = []; // Xóa dữ liệu cục bộ
+        renderTable(); // Cập nhật UI
+        alert('Đã xóa tất cả dữ liệu khỏi Firebase thành công!');
+    } catch (error) {
+        console.error("Lỗi khi xóa dữ liệu từ Firestore:", error);
+        alert("Lỗi khi xóa dữ liệu từ cơ sở dữ liệu: " + error.message);
+    }
+}
+
+// Hàm xóa dữ liệu hiển thị (chỉ gọi clearFirestoreData())
+function clearData() {
+    clearFirestoreData();
+}
+
+// Hàm lưu dữ liệu đã nhập vào Firestore
+async function saveData() {
+    if (productsData.length === 0) {
+        alert('Chưa có dữ liệu để lưu!');
+        return;
+    }
+
+    const saveButton = document.querySelector('.save-btn');
+    saveButton.textContent = 'Đang lưu...';
+    saveButton.disabled = true;
+
+    try {
+        const batch = db.batch();
+        const inputs = tableContainer.querySelectorAll('input.actual-qty');
+
+        for (const input of inputs) {
+            const docId = input.dataset.docId;
+            const value = parseFloat(input.value) || 0; // Đảm bảo là số
+
+            const productRef = productsCollection.doc(docId);
+            batch.update(productRef, {
+                so_luong_thuc_te: value,
+                updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+                updated_by: currentUserId
+            });
+        }
+        await batch.commit();
+
+        alert('Đã lưu dữ liệu thực tế vào Firestore thành công!');
+        // Sau khi lưu, tải lại để đảm bảo trạng thái UI chính xác (ví dụ: class saved-value)
+        loadDataFromFirestore();
+
+    } catch (error) {
+        console.error("Lỗi khi lưu dữ liệu vào Firestore:", error);
+        alert("Lỗi khi lưu dữ liệu: " + error.message);
+    } finally {
+        saveButton.textContent = 'Lưu Dữ Liệu';
+        saveButton.disabled = false;
+    }
+}
+
+
+// --- Hiển thị bảng HTML ---
+function renderTable() {
+    if (productsData.length === 0) {
+        tableContainer.innerHTML = '<p style="text-align: center; margin-top: 20px;">Chưa có dữ liệu. Vui lòng tải file Excel.</p>';
+        return;
+    }
+
+    let tableHTML = `
+        <table>
+            <thead>
+                <tr>
+    `;
+
+    // Tạo headers động từ các keys của đối tượng đầu tiên (trừ 'id')
+    const headers = Object.keys(productsData[0]).filter(key => key !== 'id' && key !== 'so_luong_thuc_te' && key !== 'created_at' && key !== 'updated_at' && key !== 'updated_by');
+    headers.forEach(header => {
+        tableHTML += `<th>${header}</th>`;
+    });
+    tableHTML += `
+                    <th>Số Lượng Thực Tế</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    productsData.forEach((product) => {
+        tableHTML += '<tr>';
+        headers.forEach(header => {
+            const cellContent = String(product[header] !== undefined && product[header] !== null ? product[header] : '');
+            tableHTML += `<td>${cellContent}</td>`;
+        });
+
+        const actualQty = product.so_luong_thuc_te !== undefined && product.so_luong_thuc_te !== null ? product.so_luong_thuc_te : '';
+        // Kiểm tra xem số lượng thực tế có khác 0 hoặc rỗng không để thêm class saved-value
+        const savedClass = (actualQty !== '' && actualQty !== 0) ? 'saved-value' : '';
+
+        tableHTML += `<td class="${savedClass}">
+                    <input type="number"
+                           class="actual-qty"
+                           data-doc-id="${product.id}"
+                           value="${actualQty}"
+                           min="0">
+                </td>`;
+        tableHTML += '</tr>';
+    });
+
+    tableHTML += `
+            </tbody>
+        </table>
+    `;
+    tableContainer.innerHTML = tableHTML;
+
+    // Gắn event listener cho các input sau khi chúng được tạo
+    const inputs = tableContainer.querySelectorAll('input.actual-qty');
+    inputs.forEach(input => {
+        input.addEventListener('input', (event) => {
+            // Khi người dùng nhập, xóa class saved-value ngay lập tức
+            event.target.parentElement.classList.remove('saved-value');
+        });
+    });
+}
+
+// --- Xuất dữ liệu ra Excel và tải xuống máy (tùy chọn: có thể lưu lên Firebase Storage) ---
+function exportToExcel() {
+    if (currentRole !== 'admin') {
+        alert('Bạn không có quyền xuất dữ liệu ra Excel!');
+        return;
+    }
+    if (productsData.length === 0) {
+        alert('Không có dữ liệu để xuất ra Excel!');
+        return;
+    }
+
+    // Chuẩn bị dữ liệu để xuất (kết hợp các trường gốc và số lượng thực tế)
+    const dataToExport = productsData.map(product => {
+        const exportedRow = {};
+        // Lặp qua tất cả các key trừ 'id', 'created_at', 'updated_at', 'updated_by'
+        Object.keys(product).forEach(key => {
+            if (key !== 'id' && key !== 'created_at' && key !== 'updated_at' && key !== 'updated_by') {
+                exportedRow[key] = product[key];
+            }
+        });
+        // Đảm bảo cột 'Số lượng thực tế' được thêm vào nếu nó không phải là một trong các tiêu đề gốc
+        if (!Object.prototype.hasOwnProperty.call(exportedRow, 'Số lượng thực tế')) {
+             exportedRow['Số lượng thực tế'] = product.so_luong_thuc_te !== undefined && product.so_luong_thuc_te !== null ? product.so_luong_thuc_te : '';
+        }
+        return exportedRow;
+    });
+
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'DuLieuKiemKe');
+
+    const date = new Date();
+    const dateString = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}_${date.getHours().toString().padStart(2, '0')}${date.getMinutes().toString().padStart(2, '0')}${date.getSeconds().toString().padStart(2, '0')}`;
+    const filename = `DuLieuKiemKe_${dateString}.xlsx`;
+
+    XLSX.writeFile(workbook, filename);
+    alert('Dữ liệu đã được xuất ra file Excel và tải về máy: ' + filename);
+
+    // Nếu bạn muốn lưu file này lên Firebase Storage, bạn sẽ cần thêm code ở đây:
+    /*
+    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
+    const storageRef = storage.ref().child(`exports/${filename}`);
+    storageRef.put(blob).then(snapshot => {
+        console.log('Uploaded to Firebase Storage!', snapshot);
+        snapshot.ref.getDownloadURL().then(url => {
+            console.log('Download URL:', url);
+            // Có thể lưu URL này vào Firestore nếu muốn
+        });
+    }).catch(error => {
+        console.error('Error uploading to Firebase Storage:', error);
+    });
+    */
 }

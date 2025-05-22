@@ -1,28 +1,31 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Quản lý Kiểm kê Excel</title>
+    <title>Quản lý Kiểm kê Excel (Firebase)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="google-site-verification" content="CW7X8XBtqgPYfPpb1CycFjeH5UBJ7DdxAcorM8M8Sc0" />
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-firestore-compat.js"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div id="roleScreen" class="login-screen">
         <div class="login-container">
-            <button class="role-button admin-btn" onclick="showPasswordModal()">Admin</button>
-            <button class="role-button inventory-btn" onclick="showInventoryScreen()">Kiểm kê</button>
+            <button class="role-button admin-btn" onclick="showLoginModal('admin')">Admin</button>
+            <button class="role-button inventory-btn" onclick="showLoginModal('inventory')">Kiểm kê</button>
         </div>
     </div>
 
-    <div id="passwordModal" class="password-modal">
+    <div id="loginModal" class="password-modal">
         <div class="modal-content">
-            <h3>Nhập mật khẩu Admin</h3>
-            <input type="password" id="adminPassword" placeholder="Nhập mật khẩu">
-            <button onclick="checkPassword()" class="admin-btn">Đăng nhập</button>
-            <button onclick="closePasswordModal()" class="logout-btn">Hủy</button>
+            <h3 id="loginModalTitle">Đăng nhập</h3>
+            <input type="email" id="userEmail" placeholder="Email">
+            <input type="password" id="userPassword" placeholder="Mật khẩu">
+            <button onclick="handleLogin()" class="admin-btn" id="loginButton">Đăng nhập</button>
+            <button onclick="closeLoginModal()" class="logout-btn">Hủy</button>
+            <p id="loginError" style="color: red; margin-top: 10px;"></p>
         </div>
     </div>
 
@@ -52,6 +55,5 @@
     </footer>
 
     <script src="script.js"></script>
-    
-    </body>
+</body>
 </html>
