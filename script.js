@@ -9,7 +9,7 @@ let savedData = new Map();
 
 // **URL Web App của Google Apps Script của bạn**
 // Dán URL bạn nhận được sau khi triển khai Apps Script Web App vào đây!
-const GOOGLE_APPS_SCRIPT_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwWkQc8m5h7QZrbcONTQTiwE-5kAJ--gYtqCi0R5lsXEwk22kU5jYD6VBCVKbO0wmol/exec";
+const GOOGLE_APPS_SCRIPT_WEB_APP_URL = "AKfycbwWkQc8m5h7QZrbcONTQTiwE-5kAJ--gYtqCi0R5lsXEwk22kU5jYD6VBCVKbO0wmol";
 
 // Khởi tạo khi trang tải
 window.onload = function() {
