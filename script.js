@@ -1,7 +1,13 @@
 // Thêm các biến config Google Drive
 const CLIENT_ID = '542897549830-u65s0fcgvnjqee8oqpavndr4nnehlkd0.apps.googleusercontent.com';
 const API_KEY = 'AIzaSyC_5A03lw4TkaBDVwM-y7RMYJauROj0kEI';
-const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+const DISCOVERY_DOCS = ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'];
+const SCOPES = [
+    'https://www.googleapis.com/auth/drive.file',
+    'https://www.googleapis.com/auth/drive.appdata',
+    'https://www.googleapis.com/auth/userinfo.profile',
+    'https://www.googleapis.com/auth/userinfo.email'
+].join(' ');
 
 let isAdmin = false;
 const ADMIN_PASSWORD = '123';
@@ -9,30 +15,45 @@ let workbook = null;
 let originalData = null;
 let savedData = new Map();
 let tokenClient;
-let accessToken = null;
 let gapiInited = false;
 let gisInited = false;
+let accessToken = null;
 
 // Initialize when page loads
 window.onload = function() {
     document.getElementById('roleScreen').classList.remove('hide');
     document.getElementById('mainScreen').classList.add('hide');
-    gapi.load('client', initializeGapiClient);
+    initializeGoogleApi();
 };
 
 // Google API Initialization
-async function initializeGapiClient() {
+async function initializeGoogleApi() {
     try {
         await gapi.client.init({
             apiKey: API_KEY,
-            clientId: CLIENT_ID,
-            scope: SCOPES,
-            discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
+            discoveryDocs: DISCOVERY_DOCS
         });
         gapiInited = true;
+        maybeEnableButtons();
         console.log('Google API initialized successfully');
-    } catch (error) {
-        console.error('Error initializing Google API:', error);
+    } catch (err) {
+        console.error('Error initializing GAPI client', err);
+    }
+}
+
+function gisLoaded() {
+    tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPES,
+        callback: '', // Defined later
+    });
+    gisInited = true;
+    maybeEnableButtons();
+}
+
+function maybeEnableButtons() {
+    if (gapiInited && gisInited) {
+        document.getElementById('exportBtn').style.display = 'inline-block';
     }
 }
 
@@ -238,24 +259,29 @@ async function exportToExcel() {
     }
 
     try {
-        // Ensure Google API is initialized
-        if (!gapiInited) {
-            await initializeGapiClient();
-        }
+        // Request user consent
+        tokenClient.callback = async (response) => {
+            if (response.error !== undefined) {
+                throw response;
+            }
 
-        // Get authentication token
-        if (!accessToken) {
-            accessToken = await new Promise((resolve, reject) => {
-                gapi.auth2.getAuthInstance().signIn()
-                    .then(user => {
-                        resolve(user.getAuthResponse().access_token);
-                    })
-                    .catch(error => {
-                        reject(error);
-                    });
-            });
-        }
+            accessToken = response.access_token;
+            await uploadToGoogleDrive();
+        };
 
+        if (gapi.client.getToken() === null) {
+            tokenClient.requestAccessToken({ prompt: 'consent' });
+        } else {
+            tokenClient.requestAccessToken({ prompt: '' });
+        }
+    } catch (err) {
+        console.error('Error:', err);
+        alert('Có lỗi khi xuất file: ' + err.message);
+    }
+}
+
+async function uploadToGoogleDrive() {
+    try {
         // Create Excel file
         const exportData = originalData.map((row, index) => {
             const newRow = { ...row };
@@ -267,42 +293,71 @@ async function exportToExcel() {
         const ws = XLSX.utils.json_to_sheet(exportData);
         XLSX.utils.book_append_sheet(wb, ws, 'Kiểm Kê');
 
-        // Convert to binary
+        // Convert to blob
         const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
         const blob = new Blob([excelBuffer], {
             type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         });
 
-        // Prepare metadata for Google Drive
+        // Create file metadata
         const metadata = {
-            name: `kiem_ke_${new Date().toLocaleDateString()}.xlsx`,
+            name: `kiem_ke_${new Date().toLocaleDateString('vi-VN')}.xlsx`,
             mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         };
 
-        // Upload to Google Drive
+        // Create multipart request
         const form = new FormData();
-        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('metadata', new Blob(
+            [JSON.stringify(metadata)],
+            { type: 'application/json' }
+        ));
         form.append('file', blob);
 
-        const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${accessToken}`
-            },
-            body: form
-        });
+        // Upload file
+        const response = await fetch(
+            'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`
+                },
+                body: form
+            }
+        );
 
-        if (response.ok) {
-            const result = await response.json();
-            alert('File đã được xuất thành công vào Google Drive!');
-            console.log('File ID:', result.id);
-        } else {
+        if (response.status === 403) {
+            // Try to refresh token
+            await new Promise((resolve) => {
+                tokenClient.requestAccessToken({ prompt: 'consent' });
+                tokenClient.callback = (resp) => {
+                    if (resp.error !== undefined) {
+                        throw resp;
+                    }
+                    accessToken = resp.access_token;
+                    resolve();
+                };
+            });
+            
+            // Try upload again
+            return await uploadToGoogleDrive();
+        }
+
+        if (!response.ok) {
             throw new Error('Upload failed: ' + response.statusText);
         }
 
+        const result = await response.json();
+        console.log('File uploaded successfully:', result);
+        alert('File đã được xuất thành công vào Google Drive!');
+
     } catch (error) {
-        console.error('Error exporting file:', error);
-        alert('Có lỗi xảy ra khi xuất file: ' + error.message);
+        if (error.status === 401) {
+            alert('Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
+            tokenClient.requestAccessToken({ prompt: 'consent' });
+            return;
+        }
+        console.error('Error in uploadToGoogleDrive:', error);
+        alert('Lỗi khi tải lên Google Drive: ' + error.message);
     }
 }
 
@@ -328,7 +383,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const script = document.createElement('script');
     script.src = 'https://apis.google.com/js/api.js';
     script.onload = function() {
-        gapi.load('client:auth2', initializeGapiClient);
+        gapi.load('client:auth2', initializeGoogleApi);
     };
     document.body.appendChild(script);
 });
