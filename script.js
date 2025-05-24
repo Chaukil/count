@@ -280,7 +280,7 @@ async function loadExcel() {
     }
 
     // Xác nhận nếu có dữ liệu hiện có
-    if (productsData.length > 0 && !confirm('Tải file mới sẽ xóa TẤT CẢ dữ liệu hiện tại và cấu trúc cột trong cơ sở dữ liệu Firebase. Bạn có muốn tiếp tục?')) {
+    if (productsData.length > 0 && !confirm('Tải file mới sẽ xóa TẤT CẢ dữ liệu hiện tại và cấu trúc cột trong bảng. Bạn có muốn tiếp tục?')) {
         fileInput.value = '';
         return;
     }
@@ -444,7 +444,7 @@ async function clearFirestoreData(confirmAction = true) {
         return;
     }
 
-    if (confirmAction && !confirm('Bạn có chắc chắn muốn xóa TẤT CẢ dữ liệu sản phẩm khỏi Firebase? Thao tác này không thể hoàn tác!')) {
+    if (confirmAction && !confirm('Bạn có chắc chắn muốn xóa TẤT CẢ dữ liệu sản phẩm khỏi bảng? Thao tác này không thể hoàn tác!')) {
         return;
     }
 
@@ -453,7 +453,7 @@ async function clearFirestoreData(confirmAction = true) {
         const snapshot = await productsCollection.get();
 
         if (snapshot.empty) {
-            console.log("Không có dữ liệu để xóa trong Firestore.");
+            console.log("Không có dữ liệu để xóa.");
             //alert('Không có dữ liệu để xóa!');
             return;
         }
@@ -474,7 +474,7 @@ async function clearFirestoreData(confirmAction = true) {
             commonControls.classList.add('hide'); // Ẩn khối chứa nút "Ẩn/Hiện Cột"
         }
 
-        alert('Đã xóa tất cả dữ liệu khỏi Firebase thành công!');
+        alert('Đã xóa tất cả dữ liệu khỏi bảng thành công!');
         console.log("Đã xóa tất cả dữ liệu khỏi Firestore.");
 
     } catch (error) {
@@ -490,47 +490,89 @@ function clearData() {
 
 // Lưu dữ liệu số lượng thực tế đã nhập vào Firestore
 async function saveData() {
-    if (productsData.length === 0) {
-        alert('Chưa có dữ liệu để lưu!');
+    console.log("Đang thực hiện lưu dữ liệu..."); // Log 1: Kiểm tra hàm có được gọi không
+    const batch = db.batch();
+    let changesMade = false;
+    let docsToUpdateCount = 0; 
+
+    // Lấy tất cả các hàng trong bảng
+    const rows = document.querySelectorAll('#tableContainer tbody tr');
+    console.log("Tìm thấy số hàng:", rows.length); // Log 2: Kiểm tra số hàng
+
+    if (rows.length === 0) {
+        alert("Không có dữ liệu trong bảng để lưu.");
         return;
     }
 
-    const saveButton = document.querySelector('.save-btn');
-    saveButton.textContent = 'Đang lưu...';
-    saveButton.disabled = true;
+    rows.forEach(row => {
+        const id = row.dataset.id;
+        const originalData = productsData.find(item => item.id === id);
+
+        if (!originalData) {
+            console.warn(`Không tìm thấy dữ liệu gốc cho ID: ${id}. Bỏ qua hàng này.`);
+            return;
+        }
+
+        const inputs = row.querySelectorAll('input[type="number"]');
+        let updateData = {};
+
+        inputs.forEach(input => {
+            const header = input.dataset.header;
+            const newInputValue = input.value.trim();
+            const newValue = newInputValue === '' ? null : Number(newInputValue);
+            const originalValue = originalData[header] === undefined ? null : Number(originalData[header]);
+
+            console.log(`Kiểm tra ô [${id}][${header}]: Gốc=${originalValue}, Mới=${newValue}`); // Log 3: Kiểm tra từng ô
+
+            if (newValue !== originalValue) {
+                changesMade = true;
+                updateData[header] = newValue;
+                input.classList.add('saved-value');
+            } else if (newValue === 0 && originalValue !== 0) {
+                 changesMade = true;
+                 updateData[header] = newValue;
+                 input.classList.add('saved-value');
+            } else if (newValue !== null && originalValue === null) {
+                changesMade = true;
+                updateData[header] = newValue;
+                input.classList.add('saved-value');
+            } else if (newValue === null && originalValue !== null) {
+                 changesMade = true;
+                 updateData[header] = newValue;
+                 input.classList.remove('saved-value');
+            }
+        });
+
+        if (Object.keys(updateData).length > 0) { // <--- Rất quan trọng! updateData phải có key ở đây
+            console.log(`[${id}] Có thay đổi. Dữ liệu cập nhật:`, updateData); // Kiểm tra log này
+            const docRef = productsCollection.doc(id);
+            console.log(`Đang cố gắng cập nhật đường dẫn: ${docRef.path}`);
+            batch.update(docRef, updateData);
+            docsToUpdateCount++;
+            changesMade = true;
+        } else {
+            console.log(`[${id}] Không có thay đổi đáng kể cho hàng này.`); // Nếu bạn thấy log này, tức là updateData trống
+        }
+    });
+
+    console.log("Tổng số thay đổi được phát hiện:", changesMade); // Log 5: Tổng thay đổi
+    if (!changesMade) {
+        alert("Không có thay đổi nào để lưu.");
+        return;
+    }
 
     try {
-        const batch = db.batch(); // Sử dụng batch để cập nhật nhiều document cùng lúc
-        const inputs = tableContainer.querySelectorAll('input.actual-qty'); // Lấy tất cả các ô input
+        console.log("Đang cố gắng commit batch..."); // Log 6: Trước khi commit
+        await batch.commit();
+        alert("Dữ liệu đã được lưu thành công!");
+        console.log("Batch write thành công!"); // Log 7: Sau khi commit
 
-        for (const input of inputs) {
-            const docId = input.dataset.docId; // Lấy ID document từ thuộc tính data-doc-id
-            const value = parseFloat(input.value) || 0; // Chuyển giá trị sang số, mặc định là 0 nếu không hợp lệ
-
-            // Kiểm tra xem docId có hợp lệ không
-            if (docId) {
-                const productRef = productsCollection.doc(docId); // Tạo tham chiếu đến document
-                batch.update(productRef, {
-                    so_luong_thuc_te: value, // Cập nhật số lượng thực tế
-                    updated_at: firebase.firestore.FieldValue.serverTimestamp(), // Cập nhật thời gian
-                    updated_by: currentUserId // Cập nhật người sửa
-                });
-            } else {
-                console.warn("Cảnh báo: Không tìm thấy docId cho input:", input);
-            }
-        }
-        await batch.commit(); // Thực hiện cập nhật hàng loạt
-
-        alert('Đã lưu dữ liệu thực tế vào Firestore thành công!');
-        // Tải lại dữ liệu để cập nhật trạng thái hiển thị (ví dụ: class 'saved-value')
-        loadDataFromFirestore();
+        await loadDataFromFirestore();
+        console.log("Đã tải lại dữ liệu từ Firestore."); // Log 8: Sau khi tải lại
 
     } catch (error) {
-        console.error("LỖI KHI LƯU DỮ LIỆU VÀO FIRESTORE:", error);
-        alert("Lỗi khi lưu dữ liệu: " + error.message);
-    } finally {
-        saveButton.textContent = 'Lưu Dữ Liệu';
-        saveButton.disabled = false;
+        console.error("Lỗi khi thực hiện batch write:", error); // Log 9: Lỗi Firebase
+        alert("Lỗi khi lưu dữ liệu. Vui lòng kiểm tra Console để biết chi tiết.");
     }
 }
 
@@ -602,7 +644,7 @@ function renderTable() {
     `;
 
     productsData.forEach((product) => {
-        tableHTML += '<tr>';
+        tableHTML += `<tr data-id="${product.id}">`;
         // Hiển thị dữ liệu theo thứ tự headers đã lưu, chỉ hiển thị nếu cột đó nằm trong visibleColumns
         currentExcelHeaders.forEach(header => {
             if (visibleColumns.includes(header)) {
@@ -613,17 +655,17 @@ function renderTable() {
 
         // Hiển thị ô nhập Số Lượng Thực Tế nếu cột đó hiển thị
         if (visibleColumns.includes('Số Lượng Thực Tế')) {
-            // Hiển thị giá trị 0 là rỗng, nếu đã có giá trị khác 0 thì hiển thị
             const actualQty = (product.so_luong_thuc_te === 0 || product.so_luong_thuc_te === undefined || product.so_luong_thuc_te === null) ? '' : product.so_luong_thuc_te;
-            const savedClass = (actualQty !== '' && actualQty !== 0) ? 'saved-value' : ''; // Chỉ thêm class nếu có giá trị khác 0
-
+            const savedClass = (actualQty !== '' && actualQty !== 0) ? 'saved-value' : ''; // Giữ logic tô màu này
+        
             tableHTML += `<td class="${savedClass}">
-                                 <input type="number"
-                                         class="actual-qty"
-                                         data-doc-id="${product.id}"
-                                         value="${actualQty}"
-                                         min="0">
-                                </td>`;
+                                     <input type="number"
+                                             class="actual-qty"
+                                             data-doc-id="${product.id}"
+                                             data-header="so_luong_thuc_te"  // <-- THÊM DÒNG NÀY!
+                                             value="${actualQty}"
+                                             min="0">
+                                     </td>`;
         }
         tableHTML += '</tr>';
     });
