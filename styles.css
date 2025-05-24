@@ -123,12 +123,12 @@ th {
 }
 
 input[type="number"] {
-    width: 150px;
+    width: 280px;
     padding: 2px 4px;
     border: 1px solid #ddd;
     border-radius: 10px;
-    font-size: 13px;
-    height: 20px;
+    font-size: 14px;
+    height: 23px;
 }
 
 .saved-value {
@@ -238,8 +238,8 @@ input[type="number"] {
     }
 
     input[type="number"] {
-        width: 70px;
-        font-size: 12px;
+        width: 140px;
+        font-size: 13px;
         height: 18px;
     }
 }
@@ -256,8 +256,8 @@ input[type="number"] {
     }
 
     input[type="number"] {
-        width: 60px;
-        font-size: 11px;
+        width: 100px;
+        font-size: 12px;
         height: 16px;
     }
 
