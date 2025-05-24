@@ -1,10 +1,6 @@
-@font-face {
-    font-family: 'Calibri';
-    src: url('https://db.onlinewebfonts.com/t/0a6ee448d1bd65c56f6cf256a7c6f20a.woff2') format('woff2');
-}
-
 body {
-    font-family: Calibri, sans-serif;
+    /* Bộ font này được GitHub sử dụng */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
     margin: 0;
     padding: 20px;
     background-color: #f5f5f5;
@@ -15,7 +11,7 @@ body {
     margin: 0 auto;
     background-color: white;
     padding: 20px;
-    border-radius: 8px;
+    border-radius: 10px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     margin-bottom: 60px;
 }
@@ -24,7 +20,7 @@ body {
     margin-bottom: 20px;
     padding: 15px;
     background-color: #f8f9fa;
-    border-radius: 6px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -39,20 +35,23 @@ body {
 }
 
 input[type="file"] {
-    padding: 8px;
+    padding: 10px;
     border: 1px solid #ddd;
-    border-radius: 4px;
+    border-radius: 10px;
     background-color: white;
+    font-size: 16px;
 }
 
 button {
     padding: 10px 20px;
     border: none;
-    border-radius: 4px;
+    border-radius: 10px;
     cursor: pointer;
-    font-family: Calibri, sans-serif;
-    font-size: 14px;
+    /* Áp dụng font-family chung cho button */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    font-size: 16px;
     transition: all 0.3s ease;
+    font-weight: bold;
 }
 
 button:hover {
@@ -107,12 +106,13 @@ th, td {
 }
 
 th {
-    background-color: #f4f4f4;
+    background-color: #62a3d8;
     font-weight: bold;
     color: #333;
     position: sticky;
     top: 0;
     z-index: 1;
+    text-align: center;
 }
 
 .table-container {
@@ -126,7 +126,7 @@ input[type="number"] {
     width: 150px;
     padding: 2px 4px;
     border: 1px solid #ddd;
-    border-radius: 4px;
+    border-radius: 10px;
     font-size: 13px;
     height: 20px;
 }
@@ -155,7 +155,7 @@ input[type="number"] {
     gap: 20px;
     padding: 30px;
     background-color: white;
-    border-radius: 8px;
+    border-radius: 10px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
@@ -191,18 +191,19 @@ input[type="number"] {
 .modal-content {
     background-color: white;
     padding: 20px;
-    border-radius: 8px;
-    width: 300px;
+    border-radius: 10px;
+    width: 400px;
     text-align: center;
 }
 
 .modal-content input {
     width: 100%;
-    padding: 8px;
+    padding: 12px;
     margin: 10px 0;
     border: 1px solid #ddd;
-    border-radius: 4px;
+    border-radius: 10px;
     box-sizing: border-box;
+    font-size: 16px; 
 }
 
 .hide {
@@ -216,7 +217,7 @@ input[type="number"] {
     margin-bottom: 20px;
     padding: 10px;
     background-color: #f8f9fa;
-    border-radius: 6px;
+    border-radius: 10px;
 }
 
 .logout-btn {
@@ -292,12 +293,12 @@ input[type="number"] {
 
 .table-container::-webkit-scrollbar-track {
     background: #f1f1f1;
-    border-radius: 4px;
+    border-radius: 10px;
 }
 
 .table-container::-webkit-scrollbar-thumb {
     background: #888;
-    border-radius: 4px;
+    border-radius: 10px;
 }
 
 .table-container::-webkit-scrollbar-thumb:hover {
@@ -317,4 +318,138 @@ input[type="number"] {
     font-size: 14px;
     border-top: 1px solid #ddd;
     z-index: 1000;
+}
+
+/* Thêm vào cuối file styles.css */
+
+.sortable-header {
+     cursor: pointer;
+     position: relative;
+     padding-right: 20px; /* Tạo không gian cho mũi tên */
+    }
+    
+    .sort-icon {
+     position: absolute;
+     right: 5px;
+     top: 50%;
+     transform: translateY(-50%);
+     font-size: 0.8em;
+     color: #888;
+    }
+    
+    .sort-icon.asc::after {
+     content: "▲"; /* Mũi tên lên cho sắp xếp tăng dần */
+     color: #333;
+    }
+    
+    .sort-icon.desc::after {
+    content: "▼"; /* Mũi tên xuống cho sắp xếp giảm dần */
+     color: #333;
+    }
+
+    /* Thêm vào cuối file styles.css hoặc nhóm với các nút khác */
+.action-btn {
+    background-color: #607d8b; /* Màu xám xanh */
+    color: white;
+}
+
+.action-btn:hover {
+    opacity: 0.9;
+}
+/* Kiểu cho checkbox trong modal */
+#columnCheckboxes label {
+    display: flex; /* Sử dụng flexbox */
+    align-items: center; /* Căn giữa theo chiều dọc */
+    margin-bottom: 8px; /* Tăng khoảng cách giữa các hàng */
+    font-size: 14px;
+    cursor: pointer;
+    gap: 8px; /* Khoảng cách giữa checkbox và text */
+}
+
+#columnCheckboxes input[type="checkbox"] {
+    /* Đảm bảo checkbox không bị co lại và có kích thước nhất quán */
+    flex-shrink: 0;
+    width: 16px; /* Kích thước cố định cho checkbox */
+    height: 16px;
+    margin-right: 0; /* Bỏ margin-right cũ vì đã dùng gap */
+    vertical-align: middle; /* Giữ nguyên nếu cần, nhưng flexbox đã xử lý tốt hơn */
+}
+
+/* User Info and Dropdown Styles */
+.header {
+    display: flex;
+    justify-content: space-between; /* Giúp đẩy user-info và title về hai phía */
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-radius: 10px;
+    position: relative; /* Quan trọng cho dropdown */
+}
+
+.user-info-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: relative; /* Quan trọng cho dropdown positioning */
+    z-index: 10; /* Đảm bảo dropdown nằm trên các nội dung khác */
+}
+
+.user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%; /* Làm cho ảnh tròn */
+    cursor: pointer;
+    border: 2px solid #ccc;
+    transition: border-color 0.3s ease;
+}
+
+.user-avatar:hover {
+    border-color: #2196F3;
+}
+
+.user-role {
+    font-weight: bold;
+    color: #333;
+    font-size: 1.1em;
+}
+
+.user-dropdown-content {
+    display: none; /* Mặc định ẩn */
+    position: absolute;
+    background-color: #f9f9f9;
+    min-width: 160px;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+    z-index: 100;
+    top: 100%; /* Đặt dưới avatar */
+    left: 0;
+    border-radius: 10px;
+    overflow: hidden; /* Đảm bảo border-radius hoạt động */
+    opacity: 0;
+    transform: translateY(-5px);
+    transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+}
+
+.user-dropdown-content a {
+    color: black;
+    padding: 12px 16px;
+    text-decoration: none;
+    display: block;
+    text-align: left;
+    transition: background-color 0.3s ease;
+}
+
+.user-dropdown-content a:hover {
+    background-color: #f1f1f1;
+}
+
+.user-dropdown-content.show {
+    display: block; /* Hiển thị khi có class 'show' */
+    opacity: 1; /* Hiển thị hoàn toàn */
+    transform: translateY(0); /* Trở về vị trí ban đầu */
+}
+
+/* Modal Đổi mật khẩu (giống password-modal hiện tại) */
+#changePasswordModal .modal-content input {
+    margin-bottom: 10px; /* Tăng khoảng cách giữa các input */
 }

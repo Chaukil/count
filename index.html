@@ -29,16 +29,46 @@
         </div>
     </div>
 
+    <div id="columnVisibilityModal" class="password-modal">
+        <div class="modal-content">
+            <h3>Ẩn/Hiện Cột</h3>
+            <div id="columnCheckboxes" style="max-height: 300px; overflow-y: auto; text-align: left; margin-bottom: 15px;">
+            </div>
+            <button onclick="applyColumnVisibility()" class="admin-btn">Áp dụng</button>
+            <button onclick="closeColumnVisibilityModal()" class="logout-btn">Hủy</button>
+        </div>
+    </div>
+
+    <div id="changePasswordModal" class="password-modal">
+        <div class="modal-content">
+            <h3>Đổi mật khẩu</h3>
+            <input type="password" id="currentPassword" placeholder="Mật khẩu hiện tại">
+            <input type="password" id="newPassword" placeholder="Mật khẩu mới (ít nhất 6 ký tự)">
+            <input type="password" id="confirmNewPassword" placeholder="Xác nhận mật khẩu mới">
+            <button onclick="changePassword()" class="admin-btn">Đổi mật khẩu</button>
+            <button onclick="closeChangePasswordModal()" class="logout-btn">Hủy</button>
+            <p id="changePasswordError" style="color: red; margin-top: 10px;"></p>
+        </div>
+    </div>
+
     <div id="mainScreen" class="hide">
         <div class="container">
             <div class="header">
-                <h2 id="screenTitle">Hệ thống Kiểm kê</h2>
-                <button class="logout-btn" onclick="logout()">Đăng xuất</button>
-            </div>
+                <div class="user-info-container">
+                    <img id="userAvatar" src="images/default-avatar.png" alt="User Avatar" class="user-avatar" onclick="toggleUserDropdown()">
+                    <span id="userRoleDisplay" class="user-role"></span>
+                    <div id="userDropdown" class="user-dropdown-content">
+                        <a href="#" onclick="showChangePasswordModal()">Đổi mật khẩu</a>
+                        <a href="#" onclick="logout()">Thoát</a>
+                    </div>
+                </div>
+                <h2 id="screenTitle">KIỂM KÊ</h2>
+                </div>
             <div id="adminControls" class="input-container">
                 <input type="file" id="fileInput" accept=".xlsx, .xls" onchange="validateFile(this)">
                 <button onclick="loadExcel()">Tải Excel</button>
                 <button onclick="clearData()">Xóa Dữ Liệu</button>
+                <button onclick="showColumnVisibilityModal()" class="action-btn">Ẩn/Hiện Cột</button>
             </div>
             <div class="table-container">
                 <div id="tableContainer"></div>
