@@ -68,14 +68,20 @@
                 <input type="file" id="fileInput" accept=".xlsx, .xls" onchange="validateFile(this)">
                 <button onclick="loadExcel()">Tải Excel</button>
                 <button onclick="clearData()">Xóa Dữ Liệu</button>
-                <button onclick="showColumnVisibilityModal()" class="action-btn">Ẩn/Hiện Cột</button>
+                <button onclick="showColumnVisibilityModal()" class="action-btn" id="showColumnVisibilityBtn">Ẩn/Hiện Cột</button>
+                <button onclick="exportToExcel()" class="export-btn" id="exportBtn">Xuất ra Excel</button>
             </div>
+
+            <div class="input-container" id="commonControls" style="margin-top: 10px;">
+                <button onclick="showColumnVisibilityModal()" class="action-btn" id="showColumnVisibilityBtn">Ẩn/Hiện Cột</button>
+            </div>
+            
             <div class="table-container">
                 <div id="tableContainer"></div>
             </div>
             <div style="margin-top: 20px; text-align: right;">
                 <button onclick="saveData()" class="save-btn">Lưu Dữ Liệu</button>
-                <button onclick="exportToExcel()" class="export-btn" id="exportBtn">Xuất ra Excel</button>
+                
             </div>
         </div>
     </div>

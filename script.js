@@ -64,6 +64,8 @@ const currentPasswordInput = document.getElementById('currentPassword');
 const newPasswordInput = document.getElementById('newPassword');
 const confirmNewPasswordInput = document.getElementById('confirmNewPassword');
 const changePasswordError = document.getElementById('changePasswordError');
+const showColumnVisibilityBtn = document.getElementById('showColumnVisibilityBtn');
+const commonControls = document.getElementById('commonControls'); // Tham chiếu đến div chứa nút Ẩn/Hiện Cột
 
 
 // Tham chiếu đến collection 'products' và document 'tableHeaders' trong Firestore
@@ -83,6 +85,9 @@ document.addEventListener('DOMContentLoaded', function() {
     exportBtn.classList.add('hide');
     saveDataBtn.classList.add('hide');
     clearDataBtn.classList.add('hide');
+    if (showColumnVisibilityBtn) { // Đảm bảo phần tử tồn tại trước khi thao tác
+        showColumnVisibilityBtn.classList.add('hide');
+    }
     columnVisibilityModal.style.display = 'none'; // Đảm bảo modal ẩn cột bị ẩn ban đầu
     changePasswordModal.style.display = 'none'; // Đảm bảo modal đổi mật khẩu bị ẩn ban đầu
 
@@ -144,7 +149,7 @@ auth.onAuthStateChanged(user => {
 // Hiển thị Modal Đăng nhập
 function showLoginModal(role) {
     currentRole = role; // Đặt vai trò tạm thời cho phiên đăng nhập
-    loginModalTitle.textContent = (role === 'admin' ? 'Đăng nhập Admin' : 'Đăng nhập Kiểm kê');
+    loginModalTitle.textContent = (role === 'admin' ? 'Đăng nhập Admin' : 'Đăng nhập Kiểm kê viên');
     loginError.textContent = ''; // Xóa thông báo lỗi cũ
     userEmailInput.value = ''; // Xóa email đã nhập
     userPasswordInput.value = ''; // Xóa mật khẩu đã nhập
@@ -388,6 +393,9 @@ async function loadDataFromFirestore() {
             exportBtn.classList.add('hide');
             saveDataBtn.classList.add('hide');
             clearDataBtn.classList.add('hide');
+            if (showColumnVisibilityBtn) { // ẨN NÚT HIỂN THỊ/ẨN CỘT KHI KHÔNG CÓ DỮ LIỆU
+                showColumnVisibilityBtn.classList.add('hide');
+            }
             return;
         }
 
@@ -405,7 +413,11 @@ async function loadDataFromFirestore() {
 
         // Sau khi tải dữ liệu thành công và có dữ liệu, hiển thị các nút
         saveDataBtn.classList.remove('hide'); // Nút Lưu Dữ Liệu luôn hiển thị khi có dữ liệu
-        clearDataBtn.classList.remove('hide'); // Nút Xóa Dữ Liệu cũng hiển thị
+        if (currentRole === 'admin') {
+            clearDataBtn.classList.remove('hide');
+        } else {
+            clearDataBtn.classList.add('hide');
+        }
 
         // Nút Xuất Excel chỉ hiển thị cho Admin
         if (currentRole === 'admin') {
@@ -414,6 +426,10 @@ async function loadDataFromFirestore() {
             exportBtn.classList.add('hide'); // Đảm bảo ẩn nếu không phải admin
         }
 
+        // Nút "Ẩn/Hiện Cột" (và khối commonControls chứa nó) LUÔN HIỂN THỊ KHI CÓ DỮ LIỆU
+        if (commonControls) {
+            commonControls.classList.remove('hide');
+        }
 
     } catch (error) {
         console.error("LỖI CRITICAL KHI TẢI DỮ LIỆU TỪ FIRESTORE:", error);
@@ -454,6 +470,9 @@ async function clearFirestoreData(confirmAction = true) {
         exportBtn.classList.add('hide');
         saveDataBtn.classList.add('hide');
         clearDataBtn.classList.add('hide');
+        if (commonControls) {
+            commonControls.classList.add('hide'); // Ẩn khối chứa nút "Ẩn/Hiện Cột"
+        }
 
         alert('Đã xóa tất cả dữ liệu khỏi Firebase thành công!');
         console.log("Đã xóa tất cả dữ liệu khỏi Firestore.");
