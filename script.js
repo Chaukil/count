@@ -1,978 +1,1579 @@
-// File: script.js
-
-// --- Cấu hình Firebase ---
-// Dán cấu hình Firebase của bạn từ Firebase Console tại đây
+// Cấu hình Firebase
 const firebaseConfig = {
-    apiKey: "AIzaSyDtBANCJsW0Hbt9QYszXwGY05sKWbzkK3I",
-    authDomain: "excelinventoryapp.firebaseapp.com",
-    projectId: "excelinventoryapp",
-    storageBucket: "excelinventoryapp.firebasestorage.app",
-    messagingSenderId: "30371962017",
-    appId: "1:30371962017:web:e0449e23ec9eb0104b24e0",
-    measurementId: "G-9ENEPK7XN7"
+    apiKey: "AIzaSyC-sC4qy1Xy6Q8O2EcOh_jKa7rSkvdA9w8",
+    authDomain: "inventorynew-aa3f1.firebaseapp.com",
+    projectId: "inventorynew-aa3f1",
+    storageBucket: "inventorynew-aa3f1.firebasestorage.app",
+    messagingSenderId: "1068757151671",
+    appId: "1:1068757151671:web:8874f1c0399f124a520232",
+    measurementId: "G-64E256GGPT"
 };
 
 // Khởi tạo Firebase
 firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.firestore();
-// const storage = firebase.storage(); // Bỏ comment nếu bạn muốn sử dụng Firebase Storage
+let db = firebase.firestore();
 
-// --- Biến toàn cục ---
-let currentRole = null; // 'admin' hoặc 'inventory'
-let productsData = []; // Dữ liệu sản phẩm được tải từ Firestore và hiển thị trên bảng
-let currentUserId = null; // ID của người dùng Firebase hiện tại đã đăng nhập
-let currentExcelHeaders = []; // Mảng chứa các tiêu đề cột từ file Excel đã tải lên cuối cùng
-
-// Biến toàn cục để theo dõi cột đang được sắp xếp và chiều sắp xếp
+// Biến toàn cục
+let currentRole = null;
+let currentCategory = null;
+let tableData = [];
+let columnVisibility = {};
 let currentSortColumn = null;
-let currentSortDirection = 'asc'; // 'asc' for ascending, 'desc' for descending
+let currentSortDirection = 'asc';
 
-// Biến toàn cục mới cho chức năng ẩn/hiện cột
-let visibleColumns = []; // Mảng chứa tên các cột hiện đang hiển thị
+// Collections reference
+const categoriesRef = db.collection('categories');
+const inventoryRef = db.collection('inventory');
 
-// Email của tài khoản Admin trong Firebase Authentication
-// THAY THẾ BẰNG EMAIL ADMIN THỰC TẾ CỦA BẠN ĐÃ TẠO TRONG FIREBASE AUTH
-const ADMIN_EMAIL = "chauchikil01@gmail.com";
-
-// --- Tham chiếu đến các phần tử DOM ---
-// Đảm bảo rằng tất cả các tham chiếu DOM này được khai báo ở đây
-// và chỉ truy cập các phần tử sau khi DOM đã được tải đầy đủ.
-const roleScreen = document.getElementById('roleScreen');
-const loginModal = document.getElementById('loginModal');
-const loginModalTitle = document.getElementById('loginModalTitle');
-const userEmailInput = document.getElementById('userEmail');
-const userPasswordInput = document.getElementById('userPassword');
-const loginError = document.getElementById('loginError');
-const mainScreen = document.getElementById('mainScreen');
-const screenTitle = document.getElementById('screenTitle');
-const adminControls = document.getElementById('adminControls');
-const fileInput = document.getElementById('fileInput');
-const tableContainer = document.getElementById('tableContainer');
-const exportBtn = document.getElementById('exportBtn');
-const saveDataBtn = document.querySelector('.save-btn');
-const clearDataBtn = document.querySelector('button[onclick="clearData()"]'); // Tham chiếu cho nút "Xóa Dữ Liệu"
-
-const columnVisibilityModal = document.getElementById('columnVisibilityModal');
-const columnCheckboxesContainer = document.getElementById('columnCheckboxes');
-
-const userAvatar = document.getElementById('userAvatar');
-const userRoleDisplay = document.getElementById('userRoleDisplay');
-const userDropdown = document.getElementById('userDropdown');
-const changePasswordModal = document.getElementById('changePasswordModal');
-const currentPasswordInput = document.getElementById('currentPassword');
-const newPasswordInput = document.getElementById('newPassword');
-const confirmNewPasswordInput = document.getElementById('confirmNewPassword');
-const changePasswordError = document.getElementById('changePasswordError');
-const showColumnVisibilityBtn = document.getElementById('showColumnVisibilityBtn');
-const commonControls = document.getElementById('commonControls'); // Tham chiếu đến div chứa nút Ẩn/Hiện Cột
-
-
-// Tham chiếu đến collection 'products' và document 'tableHeaders' trong Firestore
-const productsCollection = db.collection('products');
-const tableStructureDoc = db.collection('settings').doc('tableHeaders');
-
-
-// --- Hàm khởi tạo khi trang tải (khi DOM đã sẵn sàng) ---
-// Gói toàn bộ code cần truy cập DOM vào sự kiện DOMContentLoaded
-document.addEventListener('DOMContentLoaded', function() {
-    roleScreen.classList.remove('hide');
-    mainScreen.classList.add('hide');
-    loginModal.style.display = 'none'; // Đảm bảo modal đăng nhập bị ẩn ban đầu
-    adminControls.classList.remove('show'); // Ẩn admin controls ban đầu
-
-    // Ẩn tất cả các nút khi khởi tạo
-    exportBtn.classList.add('hide');
-    saveDataBtn.classList.add('hide');
-    clearDataBtn.classList.add('hide');
-    if (showColumnVisibilityBtn) { // Đảm bảo phần tử tồn tại trước khi thao tác
-        showColumnVisibilityBtn.classList.add('hide');
-    }
-    columnVisibilityModal.style.display = 'none'; // Đảm bảo modal ẩn cột bị ẩn ban đầu
-    changePasswordModal.style.display = 'none'; // Đảm bảo modal đổi mật khẩu bị ẩn ban đầu
-
-    // Gắn sự kiện onclick cho avatar sau khi DOM đã sẵn sàng
-    if (userAvatar) {
-        userAvatar.onclick = toggleUserDropdown;
-    } else {
-        console.error("Lỗi: Không tìm thấy phần tử userAvatar trong DOM.");
-    }
-
-    // Đóng dropdown khi click bên ngoài
-    document.addEventListener('click', function(event) {
-        if (userAvatar && userDropdown) { // Đảm bảo các phần tử đã được load
-            // Nếu click không nằm trong avatar và không nằm trong dropdown, và dropdown đang hiển thị
-            if (!userAvatar.contains(event.target) && !userDropdown.contains(event.target) && userDropdown.classList.contains('show')) {
-                userDropdown.classList.remove('show');
-            }
-        }
-    });
-
-    // Thêm event listener cho các nút trong modal Đổi mật khẩu
-    document.getElementById('changePasswordModal').querySelector('button[onclick="changePassword()"]').addEventListener('click', changePassword);
-    document.getElementById('changePasswordModal').querySelector('button[onclick="closeChangePasswordModal()"]').addEventListener('click', closeChangePasswordModal);
-
-    // Thêm event listener cho các nút trong modal Đăng nhập
-    document.getElementById('loginModal').querySelector('button[onclick="handleLogin()"]').addEventListener('click', handleLogin);
-    document.getElementById('loginModal').querySelector('button[onclick="closeLoginModal()"]').addEventListener('click', closeLoginModal);
-
-    // Thêm event listener cho các nút trong modal Ẩn/Hiện Cột
-    document.getElementById('columnVisibilityModal').querySelector('button[onclick="applyColumnVisibility()"]').addEventListener('click', applyColumnVisibility);
-    document.getElementById('columnVisibilityModal').querySelector('button[onclick="closeColumnVisibilityModal()"]').addEventListener('click', closeColumnVisibilityModal);
-
-});
-
-
-// --- Chức năng Xác thực Người dùng và Chuyển đổi Màn hình ---
-
-// Theo dõi trạng thái xác thực của người dùng Firebase
-auth.onAuthStateChanged(user => {
-    if (user) {
-        // Người dùng đã đăng nhập
-        currentUserId = user.uid;
-        // Kiểm tra xem người dùng hiện tại có phải là Admin dựa trên email không
-        if (user.email === ADMIN_EMAIL) {
-            currentRole = 'admin';
-        } else {
-            currentRole = 'inventory';
-        }
-        console.log(`Người dùng đã đăng nhập: ${user.email}, Vai trò: ${currentRole}`);
-        showMainScreen(); // Hiển thị màn hình chính
-    } else {
-        // Người dùng đã đăng xuất hoặc chưa đăng nhập
-        console.log("Người dùng đã đăng xuất hoặc chưa đăng nhập.");
-        currentUserId = null;
-        logoutUI(); // Quay về màn hình chọn vai trò/đăng nhập
-    }
-});
-
-// Hiển thị Modal Đăng nhập
-function showLoginModal(role) {
-    currentRole = role; // Đặt vai trò tạm thời cho phiên đăng nhập
-    loginModalTitle.textContent = (role === 'admin' ? 'Đăng nhập Admin' : 'Đăng nhập Kiểm kê viên');
-    loginError.textContent = ''; // Xóa thông báo lỗi cũ
-    userEmailInput.value = ''; // Xóa email đã nhập
-    userPasswordInput.value = ''; // Xóa mật khẩu đã nhập
-    loginModal.style.display = 'flex'; // Hiển thị modal
-}
-
-// Đóng Modal Đăng nhập
-function closeLoginModal() {
-    loginModal.style.display = 'none';
-}
-
-// Xử lý Đăng nhập
-async function handleLogin() {
-    const email = userEmailInput.value.trim();
-    const password = userPasswordInput.value.trim();
-    loginError.textContent = ''; // Xóa lỗi cũ
-
-    if (!email || !password) {
-        loginError.textContent = 'Vui lòng nhập đầy đủ email và mật khẩu.';
-        return;
-    }
-
+// Tải danh sách danh mục từ Firebase
+async function loadCategories() {
     try {
-        // Cố gắng đăng nhập người dùng với email và mật khẩu
-        await auth.signInWithEmailAndPassword(email, password);
-        // Nếu đăng nhập thành công, auth.onAuthStateChanged sẽ tự động xử lý việc chuyển màn hình
-        closeLoginModal(); // Đóng modal
-    } catch (error) {
-        console.error("Lỗi đăng nhập:", error.code, error.message);
-        let errorMessage = 'Lỗi đăng nhập. Vui lòng thử lại.';
-        switch (error.code) {
-            case 'auth/user-not-found':
-            case 'auth/wrong-password':
-                errorMessage = 'Email hoặc mật khẩu không đúng.';
-                break;
-            case 'auth/invalid-email':
-                errorMessage = 'Email không hợp lệ.';
-                break;
-            case 'auth/too-many-requests':
-                errorMessage = 'Tài khoản này đã bị tạm khóa do quá nhiều lần đăng nhập không thành công. Vui lòng thử lại sau.';
-                break;
-            default:
-                errorMessage = 'Có lỗi xảy ra trong quá trình đăng nhập. Mã lỗi: ' + error.code;
-        }
-        loginError.textContent = errorMessage; // Hiển thị lỗi
-    }
-}
+        console.log('Loading categories...'); // Debug log
 
-// Hiển thị màn hình chính dựa trên vai trò
-function showMainScreen() {
-    roleScreen.classList.add('hide');
-    mainScreen.classList.remove('hide');
+        const snapshot = await db.collection('categories').get();
+        const categoryButtons = document.getElementById('categoryButtons');
 
-    // Cập nhật hiển thị UI dựa trên vai trò và user info
-    if (currentRole === 'admin') {
-        adminControls.classList.add('show'); // Hiển thị các nút điều khiển Admin
-        screenTitle.textContent = '';
-        userRoleDisplay.textContent = 'Admin'; // Hiển thị vai trò Admin
-    } else {
-        adminControls.classList.remove('show'); // Ẩn các nút điều khiển Admin
-        screenTitle.textContent = '';
-        userRoleDisplay.textContent = 'Kiểm kê viên'; // Hiển thị vai trò Kiểm kê viên
-    }
-
-    // Tải dữ liệu từ Firestore khi vào màn hình chính
-    loadDataFromFirestore();
-}
-
-// Xử lý Đăng xuất
-async function logout() {
-    try {
-        await auth.signOut();
-        // auth.onAuthStateChanged sẽ tự động gọi logoutUI() sau khi đăng xuất
-    } catch (error) {
-        console.error("Lỗi khi đăng xuất:", error);
-        alert("Lỗi khi đăng xuất. Vui lòng thử lại.");
-    }
-}
-
-// Cập nhật UI khi đăng xuất
-function logoutUI() {
-    currentRole = null;
-    currentUserId = null;
-    productsData = []; // Xóa dữ liệu cục bộ
-    currentExcelHeaders = []; // Xóa headers cục bộ
-    tableContainer.innerHTML = ''; // Xóa bảng HTML
-    fileInput.value = ''; // Reset input file
-    visibleColumns = []; // Xóa các cột hiển thị khi đăng xuất
-
-    mainScreen.classList.add('hide'); // Ẩn màn hình chính
-    roleScreen.classList.remove('hide'); // Hiển thị màn hình chọn vai trò
-    adminControls.classList.remove('show'); // Đảm bảo ẩn admin controls
-
-    // Ẩn tất cả các nút khi đăng xuất
-    exportBtn.classList.add('hide');
-    saveDataBtn.classList.add('hide');
-    clearDataBtn.classList.add('hide');
-    columnVisibilityModal.style.display = 'none'; // Đảm bảo modal ẩn cột bị ẩn
-    userDropdown.classList.remove('show'); // Ẩn dropdown user khi đăng xuất
-    closeChangePasswordModal(); // Đảm bảo đóng modal đổi mật khẩu
-}
-
-// --- Xử lý Tải File Excel và Lưu vào Firestore ---
-
-// Kiểm tra định dạng file Excel
-function validateFile(input) {
-    const file = input.files[0];
-    if (file) {
-        const fileExtension = file.name.split('.').pop().toLowerCase();
-        if (fileExtension !== 'xlsx' && fileExtension !== 'xls') {
-            alert('Vui lòng chọn file Excel (.xlsx hoặc .xls).');
-            input.value = ''; // Xóa file đã chọn
-        }
-    }
-}
-
-// Tải file Excel và lưu vào Firestore
-async function loadExcel() {
-    if (currentRole !== 'admin') {
-        alert('Bạn không có quyền thực hiện chức năng này!');
-        return;
-    }
-
-    const file = fileInput.files[0];
-    if (!file) {
-        alert('Vui lòng chọn file Excel!');
-        return;
-    }
-
-    // Xác nhận nếu có dữ liệu hiện có
-    if (productsData.length > 0 && !confirm('Tải file mới sẽ xóa TẤT CẢ dữ liệu hiện tại và cấu trúc cột trong bảng. Bạn có muốn tiếp tục?')) {
-        fileInput.value = '';
-        return;
-    }
-
-    const loadButton = document.querySelector('button[onclick="loadExcel()"]');
-    loadButton.textContent = 'Đang tải...';
-    loadButton.disabled = true;
-
-    try {
-        // Đọc file Excel dưới dạng ArrayBuffer
-        const data = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (e) => resolve(new Uint8Array(e.target.result));
-            reader.onerror = (e) => reject(e);
-            reader.readAsArrayBuffer(file);
-        });
-
-        const workbook = XLSX.read(data, { type: 'array' });
-        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-
-        // Đọc header riêng biệt từ hàng đầu tiên
-        const rawData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
-        const excelHeaders = rawData[0];
-
-        // Đọc dữ liệu từ hàng thứ 2 trở đi dưới dạng JSON objects
-        const dataRows = XLSX.utils.sheet_to_json(firstSheet);
-
-        if (!dataRows || dataRows.length === 0) {
-            alert('File Excel không có dữ liệu hoặc không đúng định dạng. Vui lòng kiểm tra file.');
+        if (!categoryButtons) {
+            console.error('Category buttons container not found');
             return;
         }
 
-        // --- LƯU CẤU TRÚC HEADERS VÀO FIRESTORE ---
-        await tableStructureDoc.set({
-            headers: excelHeaders, // Lưu mảng tên các cột gốc từ Excel
-            uploaded_at: firebase.firestore.FieldValue.serverTimestamp(),
-            uploaded_by: currentUserId
-        });
-        console.log("Đã lưu cấu trúc headers vào Firestore:", excelHeaders);
-
-        // Xóa dữ liệu sản phẩm cũ khỏi Firestore
-        await clearFirestoreData(false); // Gọi hàm xóa nhưng không hỏi xác nhận lại
-
-        // --- Thêm dữ liệu sản phẩm mới vào Firestore theo từng hàng (sử dụng Batch) ---
-        console.log("Đang thêm dữ liệu mới vào Firestore...");
-        const batch = db.batch();
-        dataRows.forEach((row) => {
-            const docRef = productsCollection.doc(); // Firestore sẽ tự tạo ID document
-            batch.set(docRef, {
-                ...row, // Sao chép tất cả các trường từ Excel
-                // Đảm bảo so_luong_thuc_te là số và mặc định là 0 nếu không có hoặc không hợp lệ
-                so_luong_thuc_te: parseFloat(row.so_luong_thuc_te) || 0, // Xử lý an toàn hơn
-                created_at: firebase.firestore.FieldValue.serverTimestamp(), // Dấu thời gian tạo
-                updated_at: firebase.firestore.FieldValue.serverTimestamp(), // Dấu thời gian cập nhật
-                uploaded_by: currentUserId // ID người dùng đã tải lên
-            });
-        });
-        await batch.commit(); // Gửi batch lên Firestore
-
-        alert('Đã tải dữ liệu từ Excel và lưu vào Firestore thành công!');
-        // Sau khi lưu, tải lại dữ liệu và cấu trúc header để cập nhật giao diện
-        loadDataFromFirestore();
-
-    } catch (error) {
-        console.error('LỖI KHI XỬ LÝ FILE EXCEL HOẶC LƯU VÀO FIRESTORE:', error);
-        alert('Lỗi khi tải file Excel hoặc lưu vào Firestore: ' + error.message);
-    } finally {
-        loadButton.textContent = 'Tải Excel';
-        loadButton.disabled = false;
-        fileInput.value = ''; // Xóa file đã chọn trong input
-    }
-}
-
-// Tải dữ liệu sản phẩm và cấu trúc headers từ Firestore
-async function loadDataFromFirestore() {
-    try {
-        console.log("Bước 1: Đang cố gắng tải cấu trúc headers từ Firestore...");
-        const headersSnapshot = await tableStructureDoc.get();
-        if (headersSnapshot.exists) {
-            currentExcelHeaders = headersSnapshot.data().headers || [];
-            console.log("Bước 2: Đã tải cấu trúc headers:", currentExcelHeaders);
-
-            // Khởi tạo visibleColumns nếu đây là lần đầu hoặc sau khi tải file mới
-            // HOẶC nếu người dùng đã có cài đặt lưu trữ (ví dụ: Local Storage)
-            // Hiện tại chúng ta sẽ reset lại khi tải dữ liệu mới hoặc lần đầu load
-            if (visibleColumns.length === 0 || productsData.length === 0) {
-                 // Mặc định tất cả các cột Excel và 'Số Lượng Thực Tế' đều hiển thị
-                const allPossibleColumns = [...currentExcelHeaders];
-                if (!allPossibleColumns.includes('Số Lượng Thực Tế')) {
-                    allPossibleColumns.push('Số Lượng Thực Tế');
-                }
-                visibleColumns = allPossibleColumns;
-            }
-        } else {
-            console.warn("Không tìm thấy cấu trúc headers trong Firestore. Vui lòng tải một file Excel.");
-            currentExcelHeaders = []; // Đảm bảo mảng rỗng nếu không có headers
-            visibleColumns = []; // Không có headers thì không có cột nào hiển thị
-        }
-
-        console.log("Bước 3: Đang tải dữ liệu sản phẩm từ Firestore...");
-        const snapshot = await productsCollection.get();
-
-        console.log("Bước 4: Snapshot dữ liệu sản phẩm đã nhận được. Số lượng tài liệu:", snapshot.docs.length);
+        categoryButtons.innerHTML = '';
 
         if (snapshot.empty) {
-            console.log("Bước 5: Collection 'products' rỗng hoặc không có tài liệu nào.");
-            productsData = []; // Đảm bảo mảng rỗng
-            renderTable(); // Vẫn gọi renderTable để hiển thị thông báo "Chưa có dữ liệu"
-            // Ẩn các nút nếu không có dữ liệu
-            exportBtn.classList.add('hide');
-            saveDataBtn.classList.add('hide');
-            clearDataBtn.classList.add('hide');
-            if (showColumnVisibilityBtn) { // ẨN NÚT HIỂN THỊ/ẨN CỘT KHI KHÔNG CÓ DỮ LIỆU
-                showColumnVisibilityBtn.classList.add('hide');
-            }
+            categoryButtons.innerHTML = '<p class="no-data">Chưa có danh mục nào</p>';
             return;
         }
 
-        productsData = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                ...data
-            };
+        snapshot.forEach(doc => {
+            const category = { id: doc.id, ...doc.data() };
+            const categoryCard = document.createElement('div');
+            categoryCard.className = 'category-card';
+            categoryCard.onclick = () => selectCategory(category);
+
+            // Format timestamp
+            const lastUploadTime = category.lastUploadTime ? 
+                formatTimestamp(category.lastUploadTime) : 'Chưa có dữ liệu';
+
+            categoryCard.innerHTML = `
+                <div class="category-content">
+                    <h3>${category.name}</h3>
+                    <p>${category.description || ''}</p>
+                    <div class="category-info">
+                        <span class="upload-time">
+                            <i class="fas fa-clock"></i>
+                            Lần cập nhật cuối: <b>${lastUploadTime}</b>
+                        </span>
+                    </div>
+                </div>
+            `;
+            categoryButtons.appendChild(categoryCard);
         });
 
-        console.log("Bước 6: Dữ liệu sản phẩm đã tải vào productsData:", productsData);
-        renderTable(); // Gọi hàm renderTable để hiển thị dữ liệu lên bảng
-        console.log("Bước 7: Đã gọi renderTable().");
+        console.log('Categories loaded successfully'); // Debug log
 
-        // Sau khi tải dữ liệu thành công và có dữ liệu, hiển thị các nút
-        saveDataBtn.classList.remove('hide'); // Nút Lưu Dữ Liệu luôn hiển thị khi có dữ liệu
-        if (currentRole === 'admin') {
-            clearDataBtn.classList.remove('hide');
-        } else {
-            clearDataBtn.classList.add('hide');
+    } catch (error) {
+        console.error('Error loading categories:', error);
+        showMessage('Lỗi khi tải danh sách danh mục', 'error');
+    }
+}
+
+function formatTimestamp(timestamp) {
+    if (!timestamp) return 'Chưa có dữ liệu';
+    
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return new Intl.DateTimeFormat('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    }).format(date);
+}
+
+async function selectCategory(category) {
+    try {
+        console.log('Selecting category:', category);
+        currentCategory = category;
+
+        // Ẩn màn hình danh mục
+        document.getElementById('categoryScreen').classList.add('hide');
+        
+        // Hiển thị màn hình kiểm kê
+        const mainScreen = document.getElementById('mainScreen');
+        mainScreen.classList.remove('hide');
+
+        // Cập nhật tiêu đề
+        document.getElementById('screenTitle').textContent = `KIỂM KÊ - ${category.name}`;
+
+        // Hiển thị/ẩn controls theo vai trò
+        const adminControls = document.getElementById('adminControls');
+        if (adminControls) {
+            adminControls.classList.toggle('hide', currentRole !== 'admin');
         }
 
-        // Nút Xuất Excel chỉ hiển thị cho Admin
-        if (currentRole === 'admin') {
-            exportBtn.classList.remove('hide');
-        } else {
-            exportBtn.classList.add('hide'); // Đảm bảo ẩn nếu không phải admin
-        }
-
-        // Nút "Ẩn/Hiện Cột" (và khối commonControls chứa nó) LUÔN HIỂN THỊ KHI CÓ DỮ LIỆU
+        // Hiển thị controls chung
+        const commonControls = document.getElementById('commonControls');
         if (commonControls) {
             commonControls.classList.remove('hide');
         }
 
+        // Tải dữ liệu kiểm kê
+        await loadInventoryData(category.id);
+
+        console.log('Category selection completed');
     } catch (error) {
-        console.error("LỖI CRITICAL KHI TẢI DỮ LIỆU TỪ FIRESTORE:", error);
-        alert("Lỗi khi tải dữ liệu từ cơ sở dữ liệu. Vui lòng kiểm tra Console để biết chi tiết.");
+        console.error('Error selecting category:', error);
+        showMessage('Lỗi khi chọn danh mục', 'error');
     }
 }
 
-// Xóa toàn bộ dữ liệu sản phẩm trong Firestore
-async function clearFirestoreData(confirmAction = true) {
-    if (currentRole !== 'admin') {
-        alert('Bạn không có quyền thực hiện chức năng này!');
-        return;
-    }
-
-    if (confirmAction && !confirm('Bạn có chắc chắn muốn xóa TẤT CẢ dữ liệu sản phẩm khỏi bảng? Thao tác này không thể hoàn tác!')) {
-        return;
-    }
-
+function backToCategories() {
     try {
-        const batch = db.batch();
-        const snapshot = await productsCollection.get();
+        // Ẩn màn hình kiểm kê
+        document.getElementById('mainScreen').classList.add('hide');
+        
+        // Hiện màn hình danh mục
+        document.getElementById('categoryScreen').classList.remove('hide');
+        
+        // Reset dữ liệu hiện tại
+        currentCategory = null;
+        tableData = [];
+        
+        // Xóa bảng dữ liệu
+        const tableContainer = document.getElementById('tableContainer');
+        if (tableContainer) {
+            tableContainer.innerHTML = '';
+        }
+    } catch (error) {
+        console.error('Error returning to categories:', error);
+        showMessage('Lỗi khi quay lại danh mục', 'error');
+    }
+}
+
+function showColumnVisibilityModal() {
+    try {
+        const modal = document.getElementById('columnVisibilityModal');
+        const container = document.getElementById('columnCheckboxes');
+        
+        if (!modal || !container) {
+            throw new Error('Modal elements not found');
+        }
+
+        // Xóa nội dung cũ
+        container.innerHTML = '';
+
+        // Tạo checkbox cho mỗi cột (trừ STT và Số lượng thực tế)
+        const checkboxesHTML = currentHeaders.map(header => {
+            const isChecked = columnVisibility[header] !== false; // Mặc định hiển thị
+            return `
+                <label class="checkbox-container">
+                    <input type="checkbox" 
+                           value="${header}" 
+                           ${isChecked ? 'checked' : ''}>
+                    <span class="checkbox-label">${header}</span>
+                </label>
+            `;
+        }).join('');
+
+        container.innerHTML = checkboxesHTML;
+
+        // Hiển thị modal
+        modal.style.display = 'flex';
+        modal.classList.remove('hide');
+
+    } catch (error) {
+        console.error('Error showing column visibility modal:', error);
+        showMessage('Lỗi khi mở cài đặt hiển thị cột', 'error');
+    }
+}
+
+function applyColumnVisibility() {
+    try {
+        const checkboxes = document.querySelectorAll('#columnCheckboxes input[type="checkbox"]');
+        
+        // Cập nhật trạng thái hiển thị
+        checkboxes.forEach(checkbox => {
+            columnVisibility[checkbox.value] = checkbox.checked;
+        });
+
+        // Đóng modal
+        closeModal('columnVisibilityModal');
+
+        // Render lại bảng với cột đã chọn
+        renderTableWithVisibility();
+
+        showMessage('Đã cập nhật hiển thị cột', 'success');
+
+    } catch (error) {
+        console.error('Error applying column visibility:', error);
+        showMessage('Lỗi khi cập nhật hiển thị cột', 'error');
+    }
+}
+
+function renderTableWithVisibility() {
+    try {
+        const tableContainer = document.getElementById('tableContainer');
+        if (!tableContainer) return;
+
+        if (!tableData || !Array.isArray(tableData) || tableData.length === 0) {
+            tableContainer.innerHTML = '<p class="no-data">Chưa có dữ liệu kiểm kê</p>';
+            return;
+        }
+
+        // Kiểm tra headers
+        if (!currentHeaders || !Array.isArray(currentHeaders) || currentHeaders.length === 0) {
+            console.error('Headers not properly initialized');
+            showMessage('Lỗi cấu trúc dữ liệu', 'error');
+            return;
+        }
+
+        // Lọc các cột được chọn hiển thị
+        const visibleHeaders = currentHeaders.filter(header => 
+            columnVisibility[header] !== false
+        );
+
+        // Tạo HTML cho bảng
+        let html = `
+            <table>
+                <thead>
+                    <tr>
+                        <th>STT</th>
+                        ${visibleHeaders.map(header => `
+                            <th class="sortable" data-column="${header}">
+                                ${header}
+                                <span class="sort-icon ${
+                                    currentSortColumn === header ? currentSortDirection : ''
+                                }"></span>
+                            </th>
+                        `).join('')}
+                        <th>Số lượng thực tế</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        // Thêm dữ liệu vào bảng
+        tableData.forEach((item, index) => {
+            html += `
+                <tr data-id="${item.id}">
+                    <td>${index + 1}</td>
+                    ${visibleHeaders.map(header => `
+                        <td>${item[header] || ''}</td>
+                    `).join('')}
+                    <td>
+                        <input type="number" 
+                               class="quantity-input" 
+                               value="${item.actualQuantity || ''}"
+                               onchange="updateQuantity('${item.id}', this.value)">
+                    </td>
+                </tr>
+            `;
+        });
+
+        html += '</tbody></table>';
+        tableContainer.innerHTML = html;
+
+        // Thêm event listeners cho sorting
+        document.querySelectorAll('th.sortable').forEach(th => {
+            th.addEventListener('click', () => {
+                const column = th.dataset.column;
+                sortTable(column);
+            });
+        });
+
+    } catch (error) {
+        console.error('Error rendering table:', error);
+        showMessage('Lỗi khi hiển thị bảng dữ liệu', 'error');
+    }
+}
+
+// Thêm danh mục mới vào Firebase
+async function addCategory() {
+    try {
+        const nameInput = document.getElementById('newCategoryName');
+        const descInput = document.getElementById('newCategoryDesc');
+
+        if (!nameInput || !descInput) {
+            throw new Error('Form inputs not found');
+        }
+
+        const name = nameInput.value.trim();
+        const description = descInput.value.trim();
+
+        if (!name) {
+            showMessage('Vui lòng nhập tên danh mục', 'error');
+            nameInput.focus();
+            return;
+        }
+
+        // Kiểm tra trùng tên
+        const snapshot = await categoriesRef.where('name', '==', name).get();
+        if (!snapshot.empty) {
+            showMessage('Tên danh mục đã tồn tại', 'error');
+            nameInput.focus();
+            return;
+        }
+
+        // Thêm vào Firestore
+        await categoriesRef.add({
+            name: name,
+            description: description,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            createdBy: currentRole
+        });
+
+        // Đóng modal thêm danh mục
+        closeModal('addCategoryModal');
+
+        // Làm mới danh sách trong modal quản lý
+        await refreshCategoriesList();
+
+        // Reset form
+        nameInput.value = '';
+        descInput.value = '';
+
+        showMessage('Đã thêm danh mục mới thành công', 'success');
+
+    } catch (error) {
+        console.error('Error adding category:', error);
+        showMessage('Lỗi khi thêm danh mục mới', 'error');
+    }
+}
+
+async function refreshCategoriesList() {
+    try {
+        const listContainer = document.getElementById('categoriesList');
+        if (!listContainer) return;
+
+        const snapshot = await categoriesRef.get();
+        listContainer.innerHTML = '';
 
         if (snapshot.empty) {
-            console.log("Không có dữ liệu để xóa.");
-            //alert('Không có dữ liệu để xóa!');
+            listContainer.innerHTML = '<p class="no-data">Chưa có danh mục nào</p>';
             return;
         }
 
-        snapshot.docs.forEach(doc => {
+        snapshot.forEach(doc => {
+            const category = { id: doc.id, ...doc.data() };
+            const categoryDiv = createCategoryListItem(category);
+            listContainer.appendChild(categoryDiv);
+        });
+
+        // Cập nhật danh sách chính
+        loadCategories();
+
+    } catch (error) {
+        console.error('Error refreshing categories list:', error);
+        showMessage('Lỗi khi cập nhật danh sách danh mục', 'error');
+    }
+}
+
+function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.add('hide');
+    }
+}
+
+function showMessage(message, type = 'info') {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${type}-message`;
+    messageDiv.textContent = message;
+
+    // Style cho message
+    Object.assign(messageDiv.style, {
+        position: 'fixed',
+        top: '20px',
+        right: '20px',
+        padding: '15px 25px',
+        borderRadius: '5px',
+        backgroundColor: type === 'error' ? '#f44336' :
+            type === 'success' ? '#4CAF50' : '#2196F3',
+        color: 'white',
+        zIndex: '9999',
+        animation: 'fadeIn 0.5s, fadeOut 0.5s 2.5s'
+    });
+
+    document.body.appendChild(messageDiv);
+
+    // Xóa message sau 3 giây
+    setTimeout(() => {
+        messageDiv.remove();
+    }, 3000);
+}
+
+// Thêm CSS animation cho message
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeOut {
+        from { opacity: 1; transform: translateY(0); }
+        to { opacity: 0; transform: translateY(-20px); }
+    }
+`;
+document.head.appendChild(style);
+
+const additionalStyles = `
+    .quantity-input.saved {
+        background-color: #e8f5e9;
+        transition: background-color 0.3s;
+    }
+
+    table th {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 200px;
+    }
+
+    table td {
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+`;
+
+// Thêm styles mới
+const additionalStyleSheet = document.createElement('style');
+additionalStyleSheet.textContent = additionalStyles;
+document.head.appendChild(additionalStyleSheet);
+
+const modalStyles = `
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal.show {
+    display: flex;
+}
+
+.modal-content {
+    background-color: white;
+    padding: 30px;
+    border-radius: 10px;
+    min-width: 400px;
+    max-width: 90%;
+}
+
+.category-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    border-bottom: 1px solid #ddd;
+}
+
+.category-info h4 {
+    margin: 0 0 5px 0;
+}
+
+.category-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.edit-btn, .delete-btn {
+    padding: 11px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.edit-btn {
+    background-color: #2196F3;
+    color: white;
+}
+
+.delete-btn {
+    background-color: #f44336;
+    color: white;
+}
+`;
+const styleSheet = document.createElement('style');
+styleSheet.textContent = modalStyles;
+document.head.appendChild(styleSheet);
+
+
+const editModalStyles = `
+    #editCategoryModal.modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        justify-content: center;
+        align-items: center;
+        z-index: 1001;
+    }
+
+    #editCategoryModal .modal-content {
+        background-color: white;
+        padding: 30px;
+        border-radius: 10px;
+        min-width: 400px;
+        max-width: 90%;
+        position: relative;
+    }
+
+    #editCategoryModal .form-group {
+        margin-bottom: 15px;
+    }
+
+    #editCategoryModal label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+    }
+
+    #editCategoryModal input,
+    #editCategoryModal textarea {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+
+    #editCategoryModal textarea {
+        height: 100px;
+        resize: vertical;
+    }
+
+    #editCategoryModal .modal-buttons {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 20px;
+    }
+`;
+
+// Thêm styles vào head
+const editStyleSheet = document.createElement('style');
+editStyleSheet.textContent = editModalStyles;
+document.head.appendChild(editStyleSheet);
+
+
+const inventoryStyles = `
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 2000;
+    }
+
+    .loading-content {
+        background-color: white;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+    }
+
+    .spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #3498db;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 10px;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+    }
+
+    th, td {
+        padding: 12px;
+        text-align: left;
+        border: 1px solid #ddd;
+    }
+
+    th {
+        background-color: #f5f5f5;
+        font-weight: bold;
+        cursor: pointer;
+    }
+
+    th:hover {
+        background-color: #e9ecef;
+    }
+
+    .quantity-input {
+        width: 100px;
+        padding: 5px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+
+    .quantity-input:focus {
+        border-color: #2196F3;
+        outline: none;
+    }
+
+    .sortable {
+        position: relative;
+    }
+
+    .sort-icon {
+        display: inline-block;
+        width: 0;
+        height: 0;
+        margin-left: 5px;
+        vertical-align: middle;
+    }
+
+    .sort-icon.asc::after {
+        content: '▲';
+    }
+
+    .sort-icon.desc::after {
+        content: '▼';
+    }
+`;
+
+// Thêm styles vào head
+const inventoryStyleSheet = document.createElement('style');
+inventoryStyleSheet.textContent = inventoryStyles;
+document.head.appendChild(inventoryStyleSheet);
+
+const columnVisibilityStyles = `
+    .checkbox-container {
+        display: flex;
+        align-items: center;
+        margin-bottom: 10px;
+        cursor: pointer;
+    }
+
+    .checkbox-container input[type="checkbox"] {
+        margin-right: 10px;
+        width: 18px;
+        height: 18px;
+    }
+
+    .checkbox-label {
+        font-size: 14px;
+    }
+
+    #columnCheckboxes {
+        max-height: 300px;
+        overflow-y: auto;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        margin: 10px 0;
+    }
+
+    #columnVisibilityModal .modal-content {
+        width: 400px;
+        max-width: 90%;
+    }
+
+    #columnVisibilityModal h3 {
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #ddd;
+    }
+`;
+
+// Thêm styles
+const columnVisibilityStyleSheet = document.createElement('style');
+columnVisibilityStyleSheet.textContent = columnVisibilityStyles;
+document.head.appendChild(columnVisibilityStyleSheet);
+
+const sortingStyles = `
+    .sortable {
+        cursor: pointer;
+        position: relative;
+        padding-right: 20px;
+    }
+
+    .sort-icon {
+        position: absolute;
+        right: 5px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 0;
+        height: 0;
+        border-left: 5px solid transparent;
+        border-right: 5px solid transparent;
+    }
+
+    .sort-icon.asc::after {
+        content: '▲';
+        position: absolute;
+        color: #2196F3;
+    }
+
+    .sort-icon.desc::after {
+        content: '▼';
+        position: absolute;
+        color: #2196F3;
+    }
+
+    th:hover {
+        background-color: #e9ecef;
+    }
+`;
+
+// Thêm styles
+const sortingStyleSheet = document.createElement('style');
+sortingStyleSheet.textContent = sortingStyles;
+document.head.appendChild(sortingStyleSheet);
+
+const exportStyles = `
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    }
+
+    .loading-content {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        text-align: center;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .loading-content p {
+        margin: 10px 0 0;
+        color: #666;
+    }
+
+    @keyframes spin {
+        100% { transform: rotate(360deg); }
+    }
+
+    .loading-spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #3498db;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto;
+    }
+`;
+
+// Thêm styles
+const exportStyleSheet = document.createElement('style');
+exportStyleSheet.textContent = exportStyles;
+document.head.appendChild(exportStyleSheet);
+
+async function exportToExcel() {
+    try {
+        if (!tableData || tableData.length === 0) {
+            showMessage('Không có dữ liệu để xuất', 'error');
+            return;
+        }
+
+        showLoading('Đang tạo file Excel...');
+
+        // Lấy các cột đang hiển thị
+        const visibleHeaders = currentHeaders.filter(header => 
+            columnVisibility[header] !== false
+        );
+
+        // Tạo dữ liệu cho file Excel
+        const excelData = tableData.map((item, index) => {
+            const row = {
+                'STT': index + 1
+            };
+
+            // Thêm dữ liệu cho các cột đang hiển thị
+            visibleHeaders.forEach(header => {
+                row[header] = item[header] || '';
+            });
+
+            // Thêm số lượng thực tế
+            row['Số lượng thực tế'] = item.actualQuantity || '';
+
+            return row;
+        });
+
+        // Tạo workbook mới
+        const wb = XLSX.utils.book_new();
+        
+        // Tạo worksheet từ dữ liệu
+        const ws = XLSX.utils.json_to_sheet(excelData, {
+            header: ['STT', ...visibleHeaders, 'Số lượng thực tế']
+        });
+
+        // Điều chỉnh độ rộng cột
+        const columnWidths = {};
+        ['STT', ...visibleHeaders, 'Số lượng thực tế'].forEach(header => {
+            columnWidths[header] = { wch: Math.max(header.length, 10) };
+        });
+        ws['!cols'] = Object.values(columnWidths);
+
+        // Thêm style cho header
+        const range = XLSX.utils.decode_range(ws['!ref']);
+        for (let C = range.s.c; C <= range.e.c; C++) {
+            const address = XLSX.utils.encode_cell({ r: 0, c: C });
+            ws[address].s = {
+                font: { bold: true },
+                alignment: { horizontal: 'center' },
+                fill: { fgColor: { rgb: "CCCCCC" } }
+            };
+        }
+
+        // Thêm worksheet vào workbook
+        XLSX.utils.book_append_sheet(wb, ws, 'Kiểm kê');
+
+        // Tạo tên file với timestamp
+        const timestamp = new Date().toISOString().replace(/[:\-]|\.\d{3}/g, '');
+        const fileName = `kiem_ke_${currentCategory?.name || 'data'}_${timestamp}.xlsx`;
+
+        // Xuất file
+        XLSX.writeFile(wb, fileName);
+
+        hideLoading();
+        showMessage('Đã xuất Excel thành công', 'success');
+
+    } catch (error) {
+        hideLoading();
+        console.error('Error exporting to Excel:', error);
+        showMessage('Lỗi khi xuất Excel', 'error');
+    }
+}
+
+// Xóa danh mục
+
+function validateFile(input) {
+    try {
+        const file = input.files[0];
+        if (!file) return;
+
+        const fileName = file.name.toLowerCase();
+        const validExtensions = ['.xlsx', '.xls'];
+        const isValidExtension = validExtensions.some(ext => fileName.endsWith(ext));
+
+        if (!isValidExtension) {
+            showMessage('Vui lòng chọn file Excel (.xlsx hoặc .xls)', 'error');
+            input.value = ''; // Reset input
+            return false;
+        }
+
+        // Kiểm tra kích thước file (ví dụ: giới hạn 5MB)
+        const maxSize = 5 * 1024 * 1024; // 5MB
+        if (file.size > maxSize) {
+            showMessage('File không được vượt quá 5MB', 'error');
+            input.value = '';
+            return false;
+        }
+
+        return true;
+    } catch (error) {
+        console.error('Error validating file:', error);
+        showMessage('Lỗi khi kiểm tra file', 'error');
+        return false;
+    }
+}
+
+async function deleteCategory(categoryId) {
+    try {
+        if (!confirm('Bạn có chắc chắn muốn xóa danh mục này?')) {
+            return;
+        }
+
+        // Xóa danh mục và dữ liệu liên quan
+        await db.runTransaction(async (transaction) => {
+            // Xóa danh mục
+            transaction.delete(categoriesRef.doc(categoryId));
+
+            // Xóa tất cả dữ liệu kiểm kê của danh mục
+            const inventorySnapshot = await inventoryRef
+                .where('categoryId', '==', categoryId)
+                .get();
+            
+            inventorySnapshot.forEach(doc => {
+                transaction.delete(doc.ref);
+            });
+        });
+
+        // Cập nhật UI
+        await refreshCategoriesList();
+        showMessage('Đã xóa danh mục thành công', 'success');
+
+    } catch (error) {
+        console.error('Error in deleteCategory:', error);
+        showMessage('Lỗi khi xóa danh mục', 'error');
+    }
+}
+
+// Tải dữ liệu kiểm kê theo danh mục
+async function loadInventoryData(categoryId) {
+    try {
+        const snapshot = await inventoryRef
+            .where('categoryId', '==', categoryId)
+            .get();
+
+        tableData = [];
+        let headers = [];
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.headers && data.headers.length > 0) {
+                headers = data.headers;
+            }
+            tableData.push({
+                id: doc.id,
+                ...data.data,
+                actualQuantity: data.actualQuantity
+            });
+        });
+
+        // Lưu headers vào state
+        currentHeaders = headers;
+
+        renderTable(headers);
+    } catch (error) {
+        console.error('Error loading inventory data:', error);
+        showMessage('Lỗi khi tải dữ liệu kiểm kê', 'error');
+    }
+}
+
+// Xử lý tải file Excel
+async function loadExcel() {
+    try {
+        const fileInput = document.getElementById('fileInput');
+        const file = fileInput.files[0];
+
+        if (!file) {
+            showMessage('Vui lòng chọn file Excel', 'error');
+            return;
+        }
+
+        if (!validateFile(fileInput)) {
+            return;
+        }
+
+        showLoading('Đang tải dữ liệu...');
+
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+
+                // Lấy các headers từ Excel theo thứ tự
+                const range = XLSX.utils.decode_range(firstSheet['!ref']);
+                const headers = [];
+                for(let C = range.s.c; C <= range.e.c; C++) {
+                    const cell = firstSheet[XLSX.utils.encode_cell({r: 0, c: C})];
+                    headers.push(cell ? cell.v : '');
+                }
+
+                // Lưu headers vào state
+                currentHeaders = headers;
+
+                // Chuyển đổi dữ liệu theo headers
+                const jsonData = XLSX.utils.sheet_to_json(firstSheet, {
+                    header: headers,
+                    range: 1 // Bắt đầu từ dòng sau header
+                });
+
+                if (jsonData.length === 0) {
+                    hideLoading();
+                    showMessage('File Excel không có dữ liệu', 'error');
+                    return;
+                }
+
+                // Xóa dữ liệu cũ
+                const snapshot = await inventoryRef
+                    .where('categoryId', '==', currentCategory.id)
+                    .get();
+
+                const batch = db.batch();
+                snapshot.forEach(doc => {
+                    batch.delete(doc.ref);
+                });
+
+                // Cập nhật thời gian cho danh mục
+        batch.update(categoriesRef.doc(currentCategory.id), {
+            lastUploadTime: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+                // Thêm dữ liệu mới với cấu trúc cột
+                jsonData.forEach(item => {
+                    const docRef = inventoryRef.doc();
+                    const formattedItem = {
+                        categoryId: currentCategory.id,
+                        headers: headers, // Lưu thứ tự cột
+                        data: {}, // Dữ liệu theo từng cột
+                        actualQuantity: 0, // Số lượng thực tế
+                        uploadedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    };
+
+                    // Lưu dữ liệu theo đúng cột
+                    headers.forEach(header => {
+                        formattedItem.data[header] = item[header] || '';
+                    });
+
+                    batch.set(docRef, formattedItem);
+                });
+
+                await batch.commit();
+                hideLoading();
+                showMessage('Đã tải dữ liệu Excel thành công', 'success');
+                 await loadCategories();
+                await loadInventoryData(currentCategory.id);
+
+            } catch (error) {
+                hideLoading();
+                console.error('Error processing Excel file:', error);
+                showMessage('Lỗi khi xử lý file Excel', 'error');
+            }
+        };
+
+        reader.onerror = function() {
+            hideLoading();
+            showMessage('Lỗi khi đọc file', 'error');
+        };
+
+        reader.readAsArrayBuffer(file);
+
+    } catch (error) {
+        hideLoading();
+        console.error('Error loading Excel:', error);
+        showMessage('Lỗi khi tải file Excel', 'error');
+    }
+}
+
+
+function showLoading(message = 'Đang xử lý...') {
+    const loadingHtml = `
+        <div class="loading-overlay">
+            <div class="loading-content">
+                <div class="loading-spinner"></div>
+                <p>${message}</p>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', loadingHtml);
+}
+
+function hideLoading() {
+    const overlay = document.querySelector('.loading-overlay');
+    if (overlay) {
+        overlay.remove();
+    }
+}
+
+function formatDate(date) {
+    const d = new Date(date);
+    const pad = (n) => n < 10 ? '0' + n : n;
+    
+    return `${pad(d.getDate())}${pad(d.getMonth() + 1)}${d.getFullYear()}_${pad(d.getHours())}${pad(d.getMinutes())}`;
+}
+
+function removeAccents(str) {
+    return str.normalize('NFD')
+             .replace(/[\u0300-\u036f]/g, '')
+             .replace(/đ/g, 'd')
+             .replace(/Đ/g, 'D');
+}
+
+function createValidFileName(name) {
+    return removeAccents(name)
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_|_$/g, '');
+}
+
+// Lưu dữ liệu vào Firebase
+async function saveData() {
+    try {
+        const batch = db.batch();
+        let updateCount = 0;
+
+        tableData.forEach(item => {
+            if (item.id) {
+                const docRef = inventoryRef.doc(item.id);
+                batch.update(docRef, {
+                    ...item,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                updateCount++;
+            }
+        });
+
+        if (updateCount === 0) {
+            showMessage('Không có thay đổi để lưu', 'info');
+            return;
+        }
+
+        await batch.commit();
+        showMessage('Đã lưu dữ liệu thành công', 'success');
+        loadInventoryData(currentCategory.id);
+
+    } catch (error) {
+        console.error('Lỗi lưu dữ liệu:', error);
+        showMessage('Lỗi khi lưu dữ liệu', 'error');
+    }
+}
+
+// Xóa dữ liệu
+async function clearData() {
+    try {
+        if (!confirm('Bạn có chắc chắn muốn xóa tất cả dữ liệu của danh mục này?')) {
+            return;
+        }
+
+        const snapshot = await inventoryRef
+            .where('categoryId', '==', currentCategory.id)
+            .get();
+
+        const batch = db.batch();
+        snapshot.forEach(doc => {
             batch.delete(doc.ref);
         });
+
         await batch.commit();
-
-        productsData = []; // Xóa dữ liệu cục bộ
-        renderTable(); // Cập nhật giao diện người dùng
-
-        // Ẩn các nút sau khi xóa dữ liệu
-        exportBtn.classList.add('hide');
-        saveDataBtn.classList.add('hide');
-        clearDataBtn.classList.add('hide');
-        if (commonControls) {
-            commonControls.classList.add('hide'); // Ẩn khối chứa nút "Ẩn/Hiện Cột"
-        }
-
-        alert('Đã xóa tất cả dữ liệu khỏi bảng thành công!');
-        console.log("Đã xóa tất cả dữ liệu khỏi Firestore.");
+        showMessage('Đã xóa dữ liệu thành công', 'success');
+        tableData = [];
+        renderTable();
 
     } catch (error) {
-        console.error("LỖI KHI XÓA DỮ LIỆU TỪ FIRESTORE:", error);
-        alert("Lỗi khi xóa dữ liệu từ cơ sở dữ liệu: " + error.message);
+        console.error('Lỗi xóa dữ liệu:', error);
+        showMessage('Lỗi khi xóa dữ liệu', 'error');
     }
 }
 
-// Hàm gọi từ nút "Xóa Dữ Liệu" trên UI
-function clearData() {
-    clearFirestoreData(true);
+document.addEventListener('DOMContentLoaded', function() {
+    initializeApp();
+    const addCategoryForm = document.getElementById('addCategoryForm');
+    if (addCategoryForm) {
+        addCategoryForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            await addCategory();
+        });
+    }
+});
+
+function renderTable(headers) {
+    currentHeaders = headers;
+    // Khởi tạo columnVisibility nếu chưa có
+    headers.forEach(header => {
+        if (columnVisibility[header] === undefined) {
+            columnVisibility[header] = true;
+        }
+    });
+    renderTableWithVisibility();
 }
 
-// Lưu dữ liệu số lượng thực tế đã nhập vào Firestore
-async function saveData() {
-    console.log("Đang thực hiện lưu dữ liệu..."); // Log 1: Kiểm tra hàm có được gọi không
-    const batch = db.batch();
-    let changesMade = false;
-    let docsToUpdateCount = 0; 
+async function updateQuantity(itemId, value) {
+    try {
+        const quantity = parseFloat(value) || 0;
+        
+        // Cập nhật trong Firestore
+        await inventoryRef.doc(itemId).update({
+            actualQuantity: quantity,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
 
-    // Lấy tất cả các hàng trong bảng
-    const rows = document.querySelectorAll('#tableContainer tbody tr');
-    console.log("Tìm thấy số hàng:", rows.length); // Log 2: Kiểm tra số hàng
+        // Cập nhật dữ liệu local
+        const item = tableData.find(item => item.id === itemId);
+        if (item) {
+            item.actualQuantity = quantity;
+        }
 
-    if (rows.length === 0) {
-        alert("Không có dữ liệu trong bảng để lưu.");
-        return;
+        // Hiển thị visual feedback
+        const input = document.querySelector(`tr[data-id="${itemId}"] input`);
+        if (input) {
+            input.classList.add('saved');
+            setTimeout(() => input.classList.remove('saved'), 2000);
+        }
+
+    } catch (error) {
+        console.error('Error updating quantity:', error);
+        showMessage('Lỗi khi cập nhật số lượng', 'error');
     }
+}
+let currentHeaders = [];
+function sortTable(column) {
+    try {
+        console.log('Sorting by column:', column);
 
-    rows.forEach(row => {
-        const id = row.dataset.id;
-        const originalData = productsData.find(item => item.id === id);
+        // Đảo chiều sắp xếp nếu click vào cùng một cột
+        if (currentSortColumn === column) {
+            currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            currentSortColumn = column;
+            currentSortDirection = 'asc';
+        }
 
-        if (!originalData) {
-            console.warn(`Không tìm thấy dữ liệu gốc cho ID: ${id}. Bỏ qua hàng này.`);
+        // Sắp xếp dữ liệu
+        tableData.sort((a, b) => {
+            let valueA = a[column];
+            let valueB = b[column];
+
+            // Xử lý giá trị null/undefined
+            valueA = valueA === null || valueA === undefined ? '' : valueA;
+            valueB = valueB === null || valueB === undefined ? '' : valueB;
+
+            // Chuyển đổi sang số nếu có thể
+            if (!isNaN(valueA) && !isNaN(valueB)) {
+                valueA = parseFloat(valueA);
+                valueB = parseFloat(valueB);
+            } else {
+                valueA = String(valueA).toLowerCase();
+                valueB = String(valueB).toLowerCase();
+            }
+
+            if (currentSortDirection === 'asc') {
+                return valueA > valueB ? 1 : valueA < valueB ? -1 : 0;
+            } else {
+                return valueA < valueB ? 1 : valueA > valueB ? -1 : 0;
+            }
+        });
+
+        // Render lại bảng với dữ liệu đã sắp xếp
+        renderTableWithVisibility();
+        
+        // Cập nhật biểu tượng sắp xếp
+        updateSortIcons(column);
+
+    } catch (error) {
+        console.error('Error sorting table:', error);
+        showMessage('Lỗi khi sắp xếp dữ liệu', 'error');
+    }
+}
+
+function updateSortIcons(sortedColumn) {
+    try {
+        const headers = document.querySelectorAll('th.sortable');
+        headers.forEach(header => {
+            const icon = header.querySelector('.sort-icon');
+            const column = header.dataset.column;
+
+            // Xóa class cũ
+            icon.classList.remove('asc', 'desc');
+
+            // Thêm class mới nếu là cột đang sắp xếp
+            if (column === sortedColumn) {
+                icon.classList.add(currentSortDirection);
+            }
+        });
+    } catch (error) {
+        console.error('Error updating sort icons:', error);
+    }
+}
+
+async function initializeApp() {
+    try {
+        // Hiển thị màn hình chọn vai trò
+        const roleScreen = document.getElementById('roleScreen');
+        if (roleScreen) {
+            roleScreen.classList.remove('hide');
+        }
+
+        // Thêm event listeners cho các nút vai trò
+        const roleButtons = document.querySelectorAll('.role-button');
+        roleButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const role = button.classList.contains('admin-btn') ? 'admin' : 'inventory';
+                selectRole(role);
+            });
+        });
+
+        // Thêm event listeners cho các nút quản lý danh mục
+        const addCategoryBtn = document.getElementById('addCategoryBtn');
+        if (addCategoryBtn) {
+            addCategoryBtn.addEventListener('click', showAddCategoryModal);
+        }
+
+        const manageCategoriesBtn = document.getElementById('manageCategoriesBtn');
+        if (manageCategoriesBtn) {
+            manageCategoriesBtn.addEventListener('click', showManageCategoriesModal);
+        }
+
+        console.log('App initialized successfully');
+    } catch (error) {
+        console.error('Error initializing app:', error);
+        showMessage('Lỗi khởi tạo ứng dụng', 'error');
+    }
+}
+
+function showAddCategoryModal() {
+    try {
+        const modal = document.getElementById('addCategoryModal');
+        if (!modal) {
+            throw new Error('Modal not found');
+        }
+
+        // Reset form
+        const form = document.getElementById('addCategoryForm');
+        if (form) {
+            form.reset();
+        }
+
+        // Hiển thị modal
+        modal.style.display = 'flex';
+        modal.classList.remove('hide');
+
+        // Focus vào input tên
+        const nameInput = document.getElementById('newCategoryName');
+        if (nameInput) {
+            nameInput.focus();
+        }
+
+    } catch (error) {
+        console.error('Error showing add category modal:', error);
+        showMessage('Lỗi khi mở form thêm danh mục', 'error');
+    }
+}
+
+async function showManageCategoriesModal() {
+    try {
+        console.log('Opening manage categories modal');
+        const modal = document.getElementById('manageCategoriesModal');
+        const listContainer = document.getElementById('categoriesList');
+
+        if (!modal || !listContainer) {
+            throw new Error('Manage categories modal elements not found');
+        }
+
+        // Lấy danh sách danh mục từ Firestore
+        const snapshot = await categoriesRef.get();
+        
+        // Xóa nội dung cũ
+        listContainer.innerHTML = '';
+
+        if (snapshot.empty) {
+            listContainer.innerHTML = '<p class="no-data">Chưa có danh mục nào</p>';
+        } else {
+            snapshot.forEach(doc => {
+                const category = { id: doc.id, ...doc.data() };
+                const categoryDiv = createCategoryListItem(category);
+                listContainer.appendChild(categoryDiv);
+            });
+        }
+
+        // Hiển thị modal
+        modal.style.display = 'flex';
+        modal.classList.remove('hide');
+
+    } catch (error) {
+        console.error('Error showing manage categories modal:', error);
+        showMessage('Lỗi khi mở quản lý danh mục', 'error');
+    }
+}
+
+// Tạo element cho item trong danh sách danh mục
+function createCategoryListItem(category) {
+    const div = document.createElement('div');
+    div.className = 'category-item';
+    
+    const createdAt = category.createdAt ? 
+        new Date(category.createdAt.seconds * 1000).toLocaleString() : 
+        'N/A';
+    
+    div.innerHTML = `
+        <div class="category-info">
+            <h4>${category.name}</h4>
+            <p>${category.description || 'Không có mô tả'}</p>
+            <small>Ngày tạo: ${createdAt}</small>
+        </div>
+        <div class="category-actions">
+            <button onclick="editCategory('${category.id}')" class="btn edit-btn">
+                <i class="fas fa-edit"></i> Sửa
+            </button>
+            <button onclick="deleteCategory('${category.id}')" class="btn delete-btn">
+                <i class="fas fa-trash"></i> Xóa
+            </button>
+        </div>
+    `;
+    
+    return div;
+}
+
+async function editCategory(categoryId) {
+    try {
+        console.log('Editing category:', categoryId);
+        
+        // Lấy dữ liệu danh mục từ Firestore
+        const doc = await categoriesRef.doc(categoryId).get();
+        if (!doc.exists) {
+            showMessage('Không tìm thấy danh mục', 'error');
             return;
         }
 
-        const inputs = row.querySelectorAll('input[type="number"]');
-        let updateData = {};
+        const category = { id: doc.id, ...doc.data() };
 
-        inputs.forEach(input => {
-            const header = input.dataset.header;
-            const newInputValue = input.value.trim();
-            const newValue = newInputValue === '' ? null : Number(newInputValue);
-            const originalValue = originalData[header] === undefined ? null : Number(originalData[header]);
-
-            console.log(`Kiểm tra ô [${id}][${header}]: Gốc=${originalValue}, Mới=${newValue}`); // Log 3: Kiểm tra từng ô
-
-            if (newValue !== originalValue) {
-                changesMade = true;
-                updateData[header] = newValue;
-                input.classList.add('saved-value');
-            } else if (newValue === 0 && originalValue !== 0) {
-                 changesMade = true;
-                 updateData[header] = newValue;
-                 input.classList.add('saved-value');
-            } else if (newValue !== null && originalValue === null) {
-                changesMade = true;
-                updateData[header] = newValue;
-                input.classList.add('saved-value');
-            } else if (newValue === null && originalValue !== null) {
-                 changesMade = true;
-                 updateData[header] = newValue;
-                 input.classList.remove('saved-value');
-            }
-        });
-
-        if (Object.keys(updateData).length > 0) { // <--- Rất quan trọng! updateData phải có key ở đây
-            console.log(`[${id}] Có thay đổi. Dữ liệu cập nhật:`, updateData); // Kiểm tra log này
-            const docRef = productsCollection.doc(id);
-            console.log(`Đang cố gắng cập nhật đường dẫn: ${docRef.path}`);
-            batch.update(docRef, updateData);
-            docsToUpdateCount++;
-            changesMade = true;
-        } else {
-            console.log(`[${id}] Không có thay đổi đáng kể cho hàng này.`); // Nếu bạn thấy log này, tức là updateData trống
-        }
-    });
-
-    console.log("Tổng số thay đổi được phát hiện:", changesMade); // Log 5: Tổng thay đổi
-    if (!changesMade) {
-        alert("Không có thay đổi nào để lưu.");
-        return;
-    }
-
-    try {
-        console.log("Đang cố gắng commit batch..."); // Log 6: Trước khi commit
-        await batch.commit();
-        alert("Dữ liệu đã được lưu thành công!");
-        console.log("Batch write thành công!"); // Log 7: Sau khi commit
-
-        await loadDataFromFirestore();
-        console.log("Đã tải lại dữ liệu từ Firestore."); // Log 8: Sau khi tải lại
-
-    } catch (error) {
-        console.error("Lỗi khi thực hiện batch write:", error); // Log 9: Lỗi Firebase
-        alert("Lỗi khi lưu dữ liệu. Vui lòng kiểm tra Console để biết chi tiết.");
-    }
-}
-
-
-// --- Hiển thị dữ liệu lên Bảng HTML và Sắp xếp ---
-function renderTable() {
-    console.log("Bước A: Đang render bảng. Dữ liệu đầu vào productsData:", productsData);
-    console.log("Sử dụng Headers đã tải:", currentExcelHeaders);
-    console.log("Các cột hiển thị (visibleColumns):", visibleColumns);
-
-    if (!productsData || productsData.length === 0) {
-        tableContainer.innerHTML = '<p style="text-align: center; margin-top: 20px;">Chưa có dữ liệu. Vui lòng tải file Excel.</p>';
-        return;
-    }
-
-    let tableHTML = `
-        <table>
-            <thead>
-                <tr>
-    `;
-
-    // Nếu chưa có headers nào được tải từ Firestore, cố gắng tạo từ dữ liệu đầu tiên
-    if (currentExcelHeaders.length === 0) {
-        console.warn("Không có headers đã lưu, cố gắng suy ra từ dữ liệu đầu tiên. Vui lòng tải một file Excel để có cấu trúc cột chuẩn.");
-        if (productsData.length > 0) {
-            // Lọc các key không phải là cột dữ liệu gốc (id, timestamps, so_luong_thuc_te)
-            const firstProductKeys = Object.keys(productsData[0]).filter(key =>
-                key !== 'id' &&
-                key !== 'so_luong_thuc_te' &&
-                key !== 'created_at' &&
-                key !== 'updated_at' &&
-                key !== 'uploaded_by'
-            );
-            currentExcelHeaders = firstProductKeys;
-            // Nếu đây là lần đầu tiên xác định headers, thì mặc định tất cả đều hiển thị
-            if (visibleColumns.length === 0) {
-                const allPossibleColumns = [...currentExcelHeaders];
-                if (!allPossibleColumns.includes('Số Lượng Thực Tế')) {
-                    allPossibleColumns.push('Số Lượng Thực Tế');
-                }
-                visibleColumns = allPossibleColumns;
-            }
-        }
-    }
-
-
-    // Lặp qua các headers đã tải lên, chỉ hiển thị nếu cột đó nằm trong visibleColumns
-    currentExcelHeaders.forEach(header => {
-        if (visibleColumns.includes(header)) {
-            tableHTML += `<th class="sortable-header" data-column-name="${header}">
-                                ${header}
-                                <span class="sort-icon"></span>
-                              </th>`;
-        }
-    });
-
-    // Luôn hiển thị cột 'Số Lượng Thực Tế' nếu nó được chọn để hiển thị
-    if (visibleColumns.includes('Số Lượng Thực Tế')) {
-        tableHTML += `<th class="sortable-header" data-column-name="so_luong_thuc_te">
-                            Số Lượng Thực Tế
-                            <span class="sort-icon"></span>
-                        </th>`;
-    }
-
-    tableHTML += `
-                    </tr>
-            </thead>
-            <tbody>
-    `;
-
-    productsData.forEach((product) => {
-        tableHTML += `<tr data-id="${product.id}">`;
-        // Hiển thị dữ liệu theo thứ tự headers đã lưu, chỉ hiển thị nếu cột đó nằm trong visibleColumns
-        currentExcelHeaders.forEach(header => {
-            if (visibleColumns.includes(header)) {
-                const cellContent = String(product[header] !== undefined && product[header] !== null ? product[header] : '');
-                tableHTML += `<td>${cellContent}</td>`;
-            }
-        });
-
-        // Hiển thị ô nhập Số Lượng Thực Tế nếu cột đó hiển thị
-        if (visibleColumns.includes('Số Lượng Thực Tế')) {
-            const actualQty = (product.so_luong_thuc_te === 0 || product.so_luong_thuc_te === undefined || product.so_luong_thuc_te === null) ? '' : product.so_luong_thuc_te;
-            const savedClass = (actualQty !== '' && actualQty !== 0) ? 'saved-value' : ''; // Giữ logic tô màu này
-        
-            tableHTML += `<td class="${savedClass}">
-                                     <input type="number"
-                                             class="actual-qty"
-                                             data-doc-id="${product.id}"
-                                             data-header="so_luong_thuc_te"  // <-- THÊM DÒNG NÀY!
-                                             value="${actualQty}"
-                                             min="0">
-                                     </td>`;
-        }
-        tableHTML += '</tr>';
-    });
-
-    tableHTML += `
-            </tbody>
-        </table>
-    `;
-    tableContainer.innerHTML = tableHTML;
-
-    // Gắn event listener cho các input sau khi chúng được tạo trong DOM
-    const inputs = tableContainer.querySelectorAll('input.actual-qty');
-    inputs.forEach(input => {
-        input.addEventListener('input', (event) => {
-            // Khi người dùng nhập, xóa class 'saved-value' ngay lập tức
-            event.target.parentElement.classList.remove('saved-value');
-        });
-    });
-    console.log("Bước E: Bảng HTML đã được render và gán vào DOM. Event listeners đã được gắn.");
-
-    // --- Gắn sự kiện click cho các tiêu đề cột để sắp xếp ---
-    const sortableHeaders = tableContainer.querySelectorAll('.sortable-header');
-    sortableHeaders.forEach(header => {
-        header.addEventListener('click', () => {
-            const columnName = header.dataset.columnName;
-            sortTable(columnName);
-        });
-    });
-
-    // Cập nhật biểu tượng sắp xếp sau khi render
-    updateSortIcons();
-}
-
-// Hàm sắp xếp dữ liệu
-function sortTable(columnName) {
-    // Nếu nhấp vào cùng một cột, đảo chiều sắp xếp
-    if (currentSortColumn === columnName) {
-        currentSortDirection = (currentSortDirection === 'asc') ? 'desc' : 'asc';
-    } else {
-        // Nếu nhấp vào cột khác, đặt lại cột và sắp xếp tăng dần
-        currentSortColumn = columnName;
-        currentSortDirection = 'asc';
-    }
-
-    productsData.sort((a, b) => {
-        let valA = a[columnName];
-        let valB = b[columnName];
-
-        // Xử lý giá trị undefined/null bằng cách coi chúng là chuỗi rỗng để so sánh
-        // hoặc số 0 nếu là cột số lượng thực tế
-        if (columnName === 'so_luong_thuc_te') {
-            valA = parseFloat(valA) || 0;
-            valB = parseFloat(valB) || 0;
-            if (valA < valB) {
-                return currentSortDirection === 'asc' ? -1 : 1;
-            }
-            if (valA > valB) {
-                return currentSortDirection === 'asc' ? 1 : -1;
-            }
-        } else {
-            // So sánh chuỗi cho các cột khác
-            valA = String(valA || '').toLowerCase();
-            valB = String(valB || '').toLowerCase();
-            if (valA < valB) {
-                return currentSortDirection === 'asc' ? -1 : 1;
-            }
-            if (valA > valB) {
-                return currentSortDirection === 'asc' ? 1 : -1;
-            }
-        }
-        return 0;
-    });
-
-    renderTable(); // Render lại bảng với dữ liệu đã sắp xếp
-}
-
-// Hàm cập nhật biểu tượng sắp xếp trên tiêu đề bảng
-function updateSortIcons() {
-    const sortableHeaders = tableContainer.querySelectorAll('.sortable-header');
-    sortableHeaders.forEach(header => {
-        const sortIcon = header.querySelector('.sort-icon');
-        const columnName = header.dataset.columnName;
-
-        // Xóa tất cả các class sắp xếp cũ
-        if (sortIcon) { // Đảm bảo sortIcon tồn tại
-            sortIcon.classList.remove('asc', 'desc');
-
-            // Nếu đây là cột đang được sắp xếp, thêm class phù hợp
-            if (columnName === currentSortColumn) {
-                sortIcon.classList.add(currentSortDirection);
-            }
-        }
-    });
-}
-
-
-// --- Xuất dữ liệu ra Excel và tải xuống máy ---
-function exportToExcel() {
-    if (currentRole !== 'admin') {
-        alert('Bạn không có quyền xuất dữ liệu ra Excel!');
-        return;
-    }
-    if (productsData.length === 0) {
-        alert('Không có dữ liệu để xuất ra Excel!');
-        return;
-    }
-
-    // Đảm bảo có headers để xuất
-    if (currentExcelHeaders.length === 0) {
-        alert('Không tìm thấy cấu trúc cột để xuất. Vui lòng tải một file Excel trước.');
-        return;
-    }
-
-    const dataToExport = productsData.map(product => {
-        const exportedRow = {};
-        // Lặp qua các headers đã lưu để đảm bảo đúng thứ tự và chỉ các cột mong muốn
-        currentExcelHeaders.forEach(header => {
-            // Gán giá trị của cột đó từ dữ liệu sản phẩm
-            exportedRow[header] = product[header] !== undefined && product[header] !== null ? product[header] : '';
-        });
-
-        // Luôn thêm cột "Số lượng thực tế" vào cuối cùng của file xuất ra
-        exportedRow['Số lượng thực tế'] = product.so_luong_thuc_te !== undefined && product.so_luong_thuc_te !== null ? product.so_luong_thuc_te : '';
-        return exportedRow;
-    });
-
-    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'DuLieuKiemKe');
-
-    const date = new Date();
-    // Tạo tên file với định dạng YYYYMMDD_HHmmss
-    const dateString = `${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2, '0')}${date.getDate().toString().padStart(2, '0')}_${date.getHours().toString().padStart(2, '0')}${date.getMinutes().toString().padStart(2, '0')}${date.getSeconds().toString().padStart(2, '0')}`;
-    const filename = `DuLieuKiemKe_${dateString}.xlsx`;
-
-    // Tải file Excel xuống máy tính người dùng
-    XLSX.writeFile(workbook, filename);
-    alert('Dữ liệu đã được xuất ra file Excel và tải về máy: ' + filename);
-
-    // --- Tùy chọn: Lưu file này lên Firebase Storage ---
-    /*
-    // Bỏ comment nếu bạn đã bật Firebase Storage trong dự án Firebase
-    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
-
-    // Tạo tham chiếu đến nơi bạn muốn lưu trong Storage (ví dụ: 'exports/filename.xlsx')
-    const storageRef = storage.ref().child(`exports/${filename}`);
-
-    // Bắt đầu quá trình tải lên
-    storageRef.put(blob).then(snapshot => {
-        console.log('File đã được tải lên Firebase Storage thành công!', snapshot);
-        snapshot.ref.getDownloadURL().then(url => {
-            console.log('URL tải xuống:', url);
-            // Bạn có thể lưu URL này vào Firestore nếu muốn lưu lại lịch sử xuất file
-            // Ví dụ: db.collection('exports_log').add({ filename: filename, url: url, exported_at: firebase.firestore.FieldValue.serverTimestamp(), exported_by: currentUserId });
-        });
-    }).catch(error => {
-        console.error('Lỗi khi tải file lên Firebase Storage:', error);
-        alert('Có lỗi khi tải file lên Firebase Storage: ' + error.message);
-    });
-    */
-}
-
-
-// --- Chức năng ẩn/hiện cột ---
-
-// Hiển thị modal ẩn/hiện cột
-function showColumnVisibilityModal() {
-    // Nếu chưa có headers nào được tải, không thể cấu hình cột
-    if (currentExcelHeaders.length === 0 && productsData.length === 0) {
-        alert('Chưa có dữ liệu hoặc cấu trúc cột. Vui lòng tải một file Excel trước để cấu hình hiển thị cột.');
-        return;
-    }
-
-    columnCheckboxesContainer.innerHTML = ''; // Xóa các checkbox cũ
-
-    // Lấy tất cả các cột có thể hiển thị (từ Excel và cột "Số Lượng Thực Tế")
-    const allPossibleColumns = [...currentExcelHeaders];
-    // Chỉ thêm 'Số Lượng Thực Tế' nếu nó chưa tồn tại trong headers (để tránh trùng lặp nếu Excel đã có cột này)
-    if (!allPossibleColumns.includes('Số Lượng Thực Tế')) {
-        allPossibleColumns.push('Số Lượng Thực Tế');
-    }
-
-
-    allPossibleColumns.forEach(columnName => {
-        const isChecked = visibleColumns.includes(columnName);
-        const checkboxHTML = `
-            <label>
-                <input type="checkbox" value="${columnName}" ${isChecked ? 'checked' : ''}>
-                ${columnName}
-            </label>
+        // Tạo và hiển thị modal chỉnh sửa
+        const modalHtml = `
+            <div id="editCategoryModal" class="modal">
+                <div class="modal-content">
+                    <h3>Chỉnh Sửa Danh Mục</h3>
+                    <form id="editCategoryForm">
+                        <input type="hidden" id="editCategoryId" value="${category.id}">
+                        <div class="form-group">
+                            <label for="editCategoryName">Tên danh mục:</label>
+                            <input type="text" id="editCategoryName" value="${category.name}" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="editCategoryDesc">Mô tả:</label>
+                            <textarea id="editCategoryDesc">${category.description || ''}</textarea>
+                        </div>
+                        <div class="modal-buttons">
+                            <button type="submit" class="btn admin-btn">
+                                <i class="fas fa-save"></i> Lưu
+                            </button>
+                            <button type="button" onclick="closeEditModal()" class="btn cancel-btn">
+                                <i class="fas fa-times"></i> Hủy
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
         `;
-        columnCheckboxesContainer.innerHTML += checkboxHTML;
-    });
 
-    columnVisibilityModal.style.display = 'flex';
-}
-
-// Đóng modal ẩn/hiện cột
-function closeColumnVisibilityModal() {
-    columnVisibilityModal.style.display = 'none';
-}
-
-// Áp dụng thay đổi hiển thị cột
-function applyColumnVisibility() {
-    const checkboxes = columnCheckboxesContainer.querySelectorAll('input[type="checkbox"]');
-    visibleColumns = []; // Reset mảng cột hiển thị
-
-    checkboxes.forEach(checkbox => {
-        if (checkbox.checked) {
-            visibleColumns.push(checkbox.value);
+        // Thêm modal vào DOM
+        let editModal = document.getElementById('editCategoryModal');
+        if (editModal) {
+            editModal.remove();
         }
-    });
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
 
-    renderTable(); // Render lại bảng với các cột đã chọn
-    closeColumnVisibilityModal(); // Đóng modal
-}
+        // Lấy reference đến modal mới
+        editModal = document.getElementById('editCategoryModal');
+        const editForm = document.getElementById('editCategoryForm');
 
-// --- Chức năng User Dropdown và Đổi mật khẩu ---
+        // Thêm event listener cho form
+        editForm.addEventListener('submit', handleEditSubmit);
 
-// Hiển thị/ẩn dropdown người dùng
-function toggleUserDropdown() {
-    console.log("Avatar clicked! Toggling dropdown."); // Để debug
-    if (userDropdown) {
-        userDropdown.classList.toggle('show');
-    }
-}
+        // Hiển thị modal
+        editModal.style.display = 'flex';
 
-// Hiển thị modal đổi mật khẩu
-function showChangePasswordModal() {
-    closeLoginModal(); // Đóng modal đăng nhập nếu đang mở (đề phòng)
-    userDropdown.classList.remove('show'); // Ẩn dropdown
-    changePasswordError.textContent = ''; // Xóa thông báo lỗi cũ
-    currentPasswordInput.value = '';
-    newPasswordInput.value = '';
-    confirmNewPasswordInput.value = '';
-    changePasswordModal.style.display = 'flex';
-}
-
-// Đóng modal đổi mật khẩu
-function closeChangePasswordModal() {
-    changePasswordModal.style.display = 'none';
-}
-
-// Xử lý đổi mật khẩu
-async function changePassword() {
-    const currentPassword = currentPasswordInput.value;
-    const newPassword = newPasswordInput.value;
-    const confirmNewPassword = confirmNewPasswordInput.value;
-    const user = auth.currentUser;
-    changePasswordError.textContent = ''; // Xóa thông báo lỗi cũ
-
-    if (!currentPassword || !newPassword || !confirmNewPassword) {
-        changePasswordError.textContent = 'Vui lòng điền đầy đủ các trường.';
-        return;
-    }
-
-    if (newPassword.length < 6) {
-        changePasswordError.textContent = 'Mật khẩu mới phải có ít nhất 6 ký tự.';
-        return;
-    }
-
-    if (newPassword !== confirmNewPassword) {
-        changePasswordError.textContent = 'Mật khẩu mới và xác nhận mật khẩu không khớp.';
-        return;
-    }
-
-    if (!user) {
-        changePasswordError.textContent = 'Không có người dùng đang đăng nhập. Vui lòng đăng nhập lại.';
-        console.error("Không có người dùng đang đăng nhập để đổi mật khẩu.");
-        return;
-    }
-
-    try {
-        // Để đổi mật khẩu, người dùng cần xác thực lại gần đây
-        // Re-authenticate user with their current password
-        const credential = firebase.auth.EmailAuthProvider.credential(user.email, currentPassword);
-        await user.reauthenticateWithCredential(credential);
-
-        // Sau khi xác thực lại thành công, cập nhật mật khẩu mới
-        await user.updatePassword(newPassword);
-
-        alert('Đổi mật khẩu thành công! Bạn sẽ được đăng xuất để đăng nhập lại với mật khẩu mới.');
-        closeChangePasswordModal();
-        logout(); // Đăng xuất người dùng để họ đăng nhập lại với mật khẩu mới
     } catch (error) {
-        console.error("Lỗi khi đổi mật khẩu:", error.code, error.message);
-        let errorMessage = 'Lỗi khi đổi mật khẩu. Vui lòng thử lại.';
-        switch (error.code) {
-            case 'auth/wrong-password':
-                errorMessage = 'Mật khẩu hiện tại không đúng.';
-                break;
-            case 'auth/user-not-found': // Should not happen if user is logged in
-                errorMessage = 'Người dùng không tồn tại.';
-                break;
-            case 'auth/requires-recent-login':
-                errorMessage = 'Để đổi mật khẩu, bạn cần đăng nhập lại gần đây. Vui lòng đăng xuất và đăng nhập lại rồi thử đổi mật khẩu.';
-                break;
-            case 'auth/weak-password':
-                errorMessage = 'Mật khẩu quá yếu. Vui lòng chọn mật khẩu mạnh hơn (ít nhất 6 ký tự).';
-                break;
-            case 'auth/invalid-credential':
-                errorMessage = 'Thông tin xác thực không hợp lệ. Vui lòng kiểm tra lại mật khẩu hiện tại.';
-                break;
-            default:
-                errorMessage = 'Lỗi: ' + error.message;
+        console.error('Error in editCategory:', error);
+        showMessage('Lỗi khi mở form chỉnh sửa', 'error');
+    }
+}
+
+async function handleEditSubmit(event) {
+    event.preventDefault();
+    
+    try {
+        const categoryId = document.getElementById('editCategoryId').value;
+        const name = document.getElementById('editCategoryName').value.trim();
+        const description = document.getElementById('editCategoryDesc').value.trim();
+
+        if (!name) {
+            showMessage('Vui lòng nhập tên danh mục', 'error');
+            return;
         }
-        changePasswordError.textContent = errorMessage;
+
+        // Kiểm tra trùng tên với các danh mục khác
+        const snapshot = await categoriesRef
+            .where('name', '==', name)
+            .get();
+
+        const existingCategory = snapshot.docs.find(doc => doc.id !== categoryId);
+        if (existingCategory) {
+            showMessage('Tên danh mục đã tồn tại', 'error');
+            return;
+        }
+
+        // Cập nhật trong Firestore
+        await categoriesRef.doc(categoryId).update({
+            name,
+            description,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Đóng modal
+        closeEditModal();
+
+        // Cập nhật UI
+        await refreshCategoriesList();
+        showMessage('Đã cập nhật danh mục thành công', 'success');
+
+    } catch (error) {
+        console.error('Error in handleEditSubmit:', error);
+        showMessage('Lỗi khi cập nhật danh mục', 'error');
+    }
+}
+
+// Đóng modal chỉnh sửa
+function closeEditModal() {
+    const modal = document.getElementById('editCategoryModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+function selectRole(role) {
+    try {
+        console.log('Selecting role:', role);
+        currentRole = role;
+
+        // Ẩn màn hình chọn vai trò
+        document.getElementById('roleScreen').classList.add('hide');
+
+        // Hiển thị màn hình danh mục
+        const categoryScreen = document.getElementById('categoryScreen');
+        if (categoryScreen) {
+            categoryScreen.classList.remove('hide');
+        }
+
+        // Cập nhật hiển thị vai trò
+        const userRoleElement = document.querySelector('.user-role');
+        if (userRoleElement) {
+            userRoleElement.textContent = role === 'admin' ? 'Quản trị viên' : 'Kiểm kê viên';
+        }
+
+        // Hiển thị/ẩn controls admin
+        const adminControls = document.getElementById('categoryAdminControls');
+        if (adminControls) {
+            adminControls.classList.toggle('hide', role !== 'admin');
+        }
+
+        // Tải danh sách danh mục
+        loadCategories();
+
+        console.log('Role selection completed:', role);
+    } catch (error) {
+        console.error('Error selecting role:', error);
+        showMessage('Lỗi khi chọn vai trò', 'error');
     }
 }

@@ -1,95 +1,178 @@
 <!DOCTYPE html>
-<html>
+<html lang="vi">
+
 <head>
-    <title>Quản lý Kiểm kê Excel (Firebase)</title>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="google-site-verification" content="CW7X8XBtqgPYfPpb1CycFjeH5UBJ7DdxAcorM8M8Sc0" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-firestore-compat.js"></script>
+    <title>Hệ Thống Kiểm Kê</title>
+
+    <!-- CSS -->
     <link rel="stylesheet" href="styles.css">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <!-- Excel Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.16.9/xlsx.full.min.js"></script>
 </head>
+
 <body>
+    <!-- Màn hình chọn vai trò -->
     <div id="roleScreen" class="login-screen">
         <div class="login-container">
-            <button class="role-button admin-btn" onclick="showLoginModal('admin')">Admin</button>
-            <button class="role-button inventory-btn" onclick="showLoginModal('inventory')">Kiểm kê</button>
+            <h2>Chọn vai trò người dùng</h2>
+            <button class="role-button admin-btn" data-role="admin">
+                <i class="fas fa-user-shield"></i>
+                Quản trị viên
+            </button>
+            <button class="role-button inventory-btn" data-role="inventory">
+                <i class="fas fa-clipboard-list"></i>
+                Kiểm kê viên
+            </button>
         </div>
     </div>
 
-    <div id="loginModal" class="password-modal">
-        <div class="modal-content">
-            <h3 id="loginModalTitle">Đăng nhập</h3>
-            <input type="email" id="userEmail" placeholder="Email">
-            <input type="password" id="userPassword" placeholder="Mật khẩu">
-            <button onclick="handleLogin()" class="admin-btn" id="loginButton">Đăng nhập</button>
-            <button onclick="closeLoginModal()" class="logout-btn">Hủy</button>
-            <p id="loginError" style="color: red; margin-top: 10px;"></p>
-        </div>
-    </div>
-
-    <div id="columnVisibilityModal" class="password-modal">
-        <div class="modal-content">
-            <h3>Ẩn/Hiện Cột</h3>
-            <div id="columnCheckboxes" style="max-height: 300px; overflow-y: auto; text-align: left; margin-bottom: 15px;">
-            </div>
-            <button onclick="applyColumnVisibility()" class="admin-btn">Áp dụng</button>
-            <button onclick="closeColumnVisibilityModal()" class="logout-btn">Hủy</button>
-        </div>
-    </div>
-
-    <div id="changePasswordModal" class="password-modal">
-        <div class="modal-content">
-            <h3>Đổi mật khẩu</h3>
-            <input type="password" id="currentPassword" placeholder="Mật khẩu hiện tại">
-            <input type="password" id="newPassword" placeholder="Mật khẩu mới (ít nhất 6 ký tự)">
-            <input type="password" id="confirmNewPassword" placeholder="Xác nhận mật khẩu mới">
-            <button onclick="changePassword()" class="admin-btn">Đổi mật khẩu</button>
-            <button onclick="closeChangePasswordModal()" class="logout-btn">Hủy</button>
-            <p id="changePasswordError" style="color: red; margin-top: 10px;"></p>
-        </div>
-    </div>
-
-    <div id="mainScreen" class="hide">
+    <!-- Màn hình danh mục -->
+    <div id="categoryScreen" class="screen hide">
         <div class="container">
+            <!-- Header -->
             <div class="header">
-                <div class="user-info-container">
-                    <img id="userAvatar" src="images/default-avatar.png" alt="User Avatar" class="user-avatar" onclick="toggleUserDropdown()">
-                    <span id="userRoleDisplay" class="user-role"></span>
-                    <div id="userDropdown" class="user-dropdown-content">
-                        <a href="#" onclick="showChangePasswordModal()">Đổi mật khẩu</a>
-                        <a href="#" onclick="logout()">Thoát</a>
-                    </div>
+                <div class="user-info">
+                    <i class="fas fa-user"></i>
+                    <span class="user-role"></span>
                 </div>
-                <h2 id="screenTitle">KIỂM KÊ</h2>
-                </div>
-            <div id="adminControls" class="input-container">
-                <input type="file" id="fileInput" accept=".xlsx, .xls" onchange="validateFile(this)">
-                <button onclick="loadExcel()">Tải Excel</button>
-                <button onclick="clearData()">Xóa Dữ Liệu</button>
-                <button onclick="showColumnVisibilityModal()" class="action-btn" id="showColumnVisibilityBtn">Ẩn/Hiện Cột</button>
-                <button onclick="exportToExcel()" class="export-btn" id="exportBtn">Xuất ra Excel</button>
+                <h2>DANH MỤC KIỂM KÊ</h2>
             </div>
 
-            <div class="input-container" id="commonControls" style="margin-top: 10px;">
-                <button onclick="showColumnVisibilityModal()" class="action-btn" id="showColumnVisibilityBtn">Ẩn/Hiện Cột</button>
+            <!-- Danh sách danh mục -->
+            <div class="category-buttons" id="categoryButtons">
+                <!-- Danh mục sẽ được tải vào đây -->
             </div>
-            
+
+            <!-- Điều khiển Admin -->
+            <div id="categoryAdminControls" class="admin-controls hide">
+                <button id="addCategoryBtn" class="btn admin-btn">
+                    <i class="fas fa-plus"></i> Thêm mục kiểm kê
+                </button>
+                <button id="manageCategoriesBtn" class="btn action-btn">
+                    <i class="fas fa-cog"></i> Quản lý mục kiểm kê
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Màn hình kiểm kê -->
+    <div id="mainScreen" class="screen hide">
+        <div class="container">
+            <!-- Header -->
+            <div class="header">
+                <button onclick="backToCategories()" class="btn back-btn">
+                    <i class="fas fa-arrow-left"></i> Quay lại
+                </button>
+                <h2 id="screenTitle">KIỂM KÊ</h2>
+            </div>
+
+            <!-- Điều khiển Admin -->
+            <div id="adminControls" class="admin-controls hide">
+                <div class="file-input-container">
+                    <input type="file" id="fileInput" accept=".xlsx,.xls" onchange="validateFile(this)">
+                    <label for="fileInput" class="btn file-label">
+                        <i class="fas fa-file-excel"></i> Chọn file Excel
+                    </label>
+                </div>
+                <button onclick="loadExcel()" class="btn admin-btn">
+                    <i class="fas fa-upload"></i> Tải Excel
+                </button>
+                <button onclick="clearData()" class="btn delete-btn">
+                    <i class="fas fa-trash"></i> Xóa dữ liệu
+                </button>
+                <button onclick="exportToExcel()" class="btn export-btn">
+                    <i class="fas fa-download"></i> Xuất Excel
+                </button>
+            </div>
+
+            <!-- Điều khiển chung -->
+            <div id="commonControls" class="control-group">
+                <button onclick="showColumnVisibilityModal()" class="btn action-btn">
+                    <i class="fas fa-columns"></i> Ẩn/Hiện Cột
+                </button>
+                <button onclick="saveData()" class="btn save-btn">
+                    <i class="fas fa-save"></i> Lưu Dữ Liệu
+                </button>
+            </div>
+
+            <!-- Bảng dữ liệu -->
             <div class="table-container">
                 <div id="tableContainer"></div>
             </div>
-            <div style="margin-top: 20px; text-align: right;">
-                <button onclick="saveData()" class="save-btn">Lưu Dữ Liệu</button>
-                
+        </div>
+    </div>
+
+    <!-- Modal thêm danh mục -->
+    <div id="addCategoryModal" class="modal hide">
+        <div class="modal-content">
+            <h3>Thêm Danh Mục Kiểm Kê Mới</h3>
+            <form id="addCategoryForm">
+                <div class="form-group">
+                    <label for="newCategoryName">Tên danh mục:</label>
+                    <input type="text" id="newCategoryName" required>
+                </div>
+                <div class="form-group">
+                    <label for="newCategoryDesc">Mô tả:</label>
+                    <textarea id="newCategoryDesc"></textarea>
+                </div>
+                <div class="modal-buttons">
+                    <button type="submit" class="btn admin-btn">
+                        <i class="fas fa-plus"></i> Thêm
+                    </button>
+                    <button type="button" onclick="closeModal('addCategoryModal')" class="btn cancel-btn">
+                        <i class="fas fa-times"></i> Hủy
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal quản lý danh mục -->
+    <div id="manageCategoriesModal" class="modal hide">
+        <div class="modal-content">
+            <h3>Quản Lý Danh Mục Kiểm Kê</h3>
+            <div id="categoriesList" class="categories-list">
+                <!-- Danh sách danh mục sẽ được thêm vào đây -->
+            </div>
+            <div class="modal-buttons">
+                <button onclick="closeModal('manageCategoriesModal')" class="btn cancel-btn">
+                    <i class="fas fa-times"></i> Đóng
+                </button>
             </div>
         </div>
     </div>
 
-    <footer class="footer">
-        <p>© 2025 - Lập trình và phát triển web này thuộc quyền sở hữu của Châu Chí Kil</p>
-    </footer>
+    <!-- Modal ẩn/hiện cột -->
+    <div id="columnVisibilityModal" class="modal hide">
+        <div class="modal-content">
+            <h3>Ẩn/Hiện Cột</h3>
+            <div id="columnCheckboxes">
+                <!-- Checkboxes sẽ được thêm vào đây -->
+            </div>
+            <div class="modal-buttons">
+                <button onclick="applyColumnVisibility()" class="btn admin-btn">
+                    <i class="fas fa-check"></i> Áp dụng
+                </button>
+                <button onclick="closeModal('columnVisibilityModal')" class="btn cancel-btn">
+                    <i class="fas fa-times"></i> Hủy
+                </button>
+            </div>
+        </div>
+    </div>
 
+    <!-- Script -->
     <script src="script.js"></script>
 </body>
+
 </html>
