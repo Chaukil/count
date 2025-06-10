@@ -102,8 +102,21 @@ body {
 }
 
 .back-btn {
-    background-color: #607d8b;
+    background-color: #6c757d;
     color: white;
+    padding: 8px 15px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.3s ease;
+}
+
+.back-btn:hover {
+    background-color: #5a6268;
+    transform: translateY(-1px);
 }
 
 .btn:hover {
@@ -464,4 +477,164 @@ td:last-child {
 .modal.show {
     display: flex;
     animation: fadeIn 0.3s ease;
+}
+
+/* Dialog Modal Styles */
+.dialog-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.dialog-modal.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.dialog-content {
+    background: white;
+    border-radius: 10px;
+    width: 400px;
+    max-width: 90%;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    transform: translateY(-20px);
+    transition: all 0.3s ease;
+}
+
+.dialog-modal.show .dialog-content {
+    transform: translateY(0);
+}
+
+.dialog-header {
+    padding: 20px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.dialog-title {
+    margin: 0;
+    font-size: 1.25rem;
+    color: #333;
+}
+
+.dialog-close {
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    cursor: pointer;
+    color: #666;
+    padding: 5px;
+    transition: all 0.2s;
+}
+
+.dialog-close:hover {
+    color: #333;
+    transform: scale(1.1);
+}
+
+.dialog-body {
+    padding: 20px;
+    color: #666;
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+.dialog-footer {
+    padding: 15px 20px;
+    border-top: 1px solid #eee;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+/* Dialog Button Styles */
+.dialog-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.dialog-btn-primary {
+    background-color: #2196F3;
+    color: white;
+}
+
+.dialog-btn-secondary {
+    background-color: #e0e0e0;
+    color: #333;
+}
+
+.dialog-btn-danger {
+    background-color: #f44336;
+    color: white;
+}
+
+.dialog-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+/* Dialog Types */
+.dialog-icon {
+    font-size: 2rem;
+    margin-bottom: 15px;
+}
+
+.dialog-type-info .dialog-icon {
+    color: #2196F3;
+}
+
+.dialog-type-success .dialog-icon {
+    color: #4CAF50;
+}
+
+.dialog-type-warning .dialog-icon {
+    color: #ff9800;
+}
+
+.dialog-type-error .dialog-icon {
+    color: #f44336;
+}
+
+/* Animation */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideIn {
+    from { transform: translateY(-40px); }
+    to { transform: translateY(0); }
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .dialog-content {
+        width: 95%;
+        margin: 10px;
+    }
+
+    .dialog-footer {
+        flex-direction: column;
+    }
+
+    .dialog-btn {
+        width: 100%;
+        margin: 5px 0;
+    }
 }

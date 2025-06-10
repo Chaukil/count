@@ -42,6 +42,11 @@
         <div class="container">
             <!-- Header -->
             <div class="header">
+                <div class="header-left">
+        <button onclick="backToRoleSelection()" class="btn back-btn">
+            <i class="fas fa-arrow-left"></i> Quay lại
+        </button>
+    </div>
                 <div class="user-info">
                     <i class="fas fa-user"></i>
                     <span class="user-role"></span>
@@ -170,6 +175,21 @@
             </div>
         </div>
     </div>
+
+    <div id="dialogModal" class="dialog-modal hide">
+    <div class="dialog-content">
+        <div class="dialog-header">
+            <h3 class="dialog-title"></h3>
+            <button class="dialog-close" onclick="closeDialog()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="dialog-body"></div>
+        <div class="dialog-footer">
+            <!-- Buttons will be added dynamically -->
+        </div>
+    </div>
+</div>
 
     <!-- Script -->
     <script src="script.js"></script>

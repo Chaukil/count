@@ -128,6 +128,166 @@ async function selectCategory(category) {
     }
 }
 
+async function backToRoleSelection() {
+    try {
+        // Hiển thị xác nhận
+        const confirmed = await Dialog.confirm(
+            'Bạn có chắc muốn quay lại màn hình chọn vai trò?',
+            'Xác nhận quay lại'
+        );
+         if (!confirmed) return;
+
+        // Reset các biến state
+        currentRole = null;
+        currentCategory = null;
+        tableData = [];
+        currentHeaders = [];
+        columnVisibility = {};
+        currentSortColumn = null;
+        currentSortDirection = 'asc';
+
+        // Ẩn màn hình danh mục
+        document.getElementById('categoryScreen').classList.add('hide');
+        document.getElementById('mainScreen').classList.add('hide');
+
+        // Hiện màn hình chọn vai trò
+        document.getElementById('roleScreen').classList.remove('hide');
+
+        // Reset các container
+        const tableContainer = document.getElementById('tableContainer');
+        if (tableContainer) {
+            tableContainer.innerHTML = '';
+        }
+
+        const categoryButtons = document.getElementById('categoryButtons');
+        if (categoryButtons) {
+            categoryButtons.innerHTML = '';
+        }
+
+        // Đóng tất cả modal đang mở
+        const modals = document.querySelectorAll('.modal');
+        modals.forEach(modal => {
+            modal.classList.add('hide');
+        });
+
+    } catch (error) {
+         console.error('Error returning to role selection:', error);
+        await Dialog.error('Lỗi khi quay lại màn hình chọn vai trò');
+    }
+}
+
+// Dialog System
+const Dialog = {
+    modal: null,
+    init() {
+        this.modal = document.getElementById('dialogModal');
+    },
+
+    show(options) {
+        if (!this.modal) this.init();
+        
+        const {
+            title = '',
+            message = '',
+            type = 'info', // 'info', 'success', 'warning', 'error'
+            buttons = []
+        } = options;
+
+        // Set title and message
+        this.modal.querySelector('.dialog-title').textContent = title;
+        
+        // Set icon and message
+        const iconClass = {
+            info: 'fa-info-circle',
+            success: 'fa-check-circle',
+            warning: 'fa-exclamation-triangle',
+            error: 'fa-times-circle'
+        };
+
+        this.modal.querySelector('.dialog-body').innerHTML = `
+            <div class="dialog-type-${type}">
+                <i class="fas ${iconClass[type]} dialog-icon"></i>
+                <div>${message}</div>
+            </div>
+        `;
+
+        // Set buttons
+        const footer = this.modal.querySelector('.dialog-footer');
+        footer.innerHTML = buttons.map(btn => `
+            <button class="dialog-btn ${btn.class || 'dialog-btn-secondary'}" 
+                    onclick="Dialog.handleButton(${btn.value})">
+                ${btn.text}
+            </button>
+        `).join('');
+
+        // Show modal
+        this.modal.classList.remove('hide');
+        this.modal.classList.add('show');
+
+        // Return promise
+        return new Promise((resolve) => {
+            this.resolve = resolve;
+        });
+    },
+
+    handleButton(value) {
+        this.close();
+        if (this.resolve) this.resolve(value);
+    },
+
+    close() {
+        if (!this.modal) return;
+        this.modal.classList.remove('show');
+        this.modal.classList.add('hide');
+    },
+
+    // Predefined dialogs
+    alert(message, title = 'Thông báo') {
+        return this.show({
+            title,
+            message,
+            type: 'info',
+            buttons: [
+                { text: 'OK', class: 'dialog-btn-primary', value: true }
+            ]
+        });
+    },
+
+    confirm(message, title = 'Xác nhận') {
+        return this.show({
+            title,
+            message,
+            type: 'warning',
+            buttons: [
+                { text: 'Hủy', class: 'dialog-btn-secondary', value: false },
+                { text: 'Đồng ý', class: 'dialog-btn-primary', value: true }
+            ]
+        });
+    },
+
+    success(message, title = 'Thành công') {
+        return this.show({
+            title,
+            message,
+            type: 'success',
+            buttons: [
+                { text: 'OK', class: 'dialog-btn-primary', value: true }
+            ]
+        });
+    },
+
+    error(message, title = 'Lỗi') {
+        return this.show({
+            title,
+            message,
+            type: 'error',
+            buttons: [
+                { text: 'OK', class: 'dialog-btn-primary', value: true }
+            ]
+        });
+    }
+};
+
 function backToCategories() {
     try {
         // Ẩn màn hình kiểm kê
@@ -216,15 +376,10 @@ function renderTableWithVisibility() {
         const tableContainer = document.getElementById('tableContainer');
         if (!tableContainer) return;
 
-        if (!tableData || !Array.isArray(tableData) || tableData.length === 0) {
+        // Nếu không có dữ liệu hoặc headers
+        if (!tableData || !Array.isArray(tableData) || tableData.length === 0 || 
+            !currentHeaders || !Array.isArray(currentHeaders) || currentHeaders.length === 0) {
             tableContainer.innerHTML = '<p class="no-data">Chưa có dữ liệu kiểm kê</p>';
-            return;
-        }
-
-        // Kiểm tra headers
-        if (!currentHeaders || !Array.isArray(currentHeaders) || currentHeaders.length === 0) {
-            console.error('Headers not properly initialized');
-            showMessage('Lỗi cấu trúc dữ liệu', 'error');
             return;
         }
 
@@ -287,6 +442,7 @@ function renderTableWithVisibility() {
         showMessage('Lỗi khi hiển thị bảng dữ liệu', 'error');
     }
 }
+
 
 // Thêm danh mục mới vào Firebase
 async function addCategory() {
@@ -908,10 +1064,13 @@ function validateFile(input) {
 
 async function deleteCategory(categoryId) {
     try {
-        if (!confirm('Bạn có chắc chắn muốn xóa danh mục này?')) {
-            return;
-        }
+        const confirmed = await Dialog.confirm(
+            'Bạn có chắc chắn muốn xóa danh mục này?',
+            'Xác nhận xóa'
+        );
 
+         if (!confirmed) return;
+         
         // Xóa danh mục và dữ liệu liên quan
         await db.runTransaction(async (transaction) => {
             // Xóa danh mục
@@ -929,11 +1088,11 @@ async function deleteCategory(categoryId) {
 
         // Cập nhật UI
         await refreshCategoriesList();
-        showMessage('Đã xóa danh mục thành công', 'success');
+        await Dialog.success('Đã xóa danh mục thành công');
 
     } catch (error) {
         console.error('Error in deleteCategory:', error);
-        showMessage('Lỗi khi xóa danh mục', 'error');
+        await Dialog.error('Lỗi khi xóa danh mục');
     }
 }
 
@@ -1154,9 +1313,11 @@ async function saveData() {
 // Xóa dữ liệu
 async function clearData() {
     try {
-        if (!confirm('Bạn có chắc chắn muốn xóa tất cả dữ liệu của danh mục này?')) {
-            return;
-        }
+        const confirmed = await Dialog.confirm(
+            'Bạn có chắc chắn muốn xóa tất cả dữ liệu này?',
+            'Xác nhận xóa'
+        );
+         if (!confirmed) return;
 
         const snapshot = await inventoryRef
             .where('categoryId', '==', currentCategory.id)
@@ -1168,13 +1329,14 @@ async function clearData() {
         });
 
         await batch.commit();
-        showMessage('Đã xóa dữ liệu thành công', 'success');
+        await Dialog.success('Đã xóa dữ liệu thành công');
         tableData = [];
-        renderTable();
+        currentHeaders = []; // Reset headers
+        renderTableWithVisibility();
 
     } catch (error) {
         console.error('Lỗi xóa dữ liệu:', error);
-        showMessage('Lỗi khi xóa dữ liệu', 'error');
+         await Dialog.error('Lỗi khi xóa dữ liệu');
     }
 }
 
