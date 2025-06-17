@@ -104,7 +104,7 @@ async function selectCategory(category) {
         mainScreen.classList.remove('hide');
 
         // Cập nhật tiêu đề
-        document.getElementById('screenTitle').textContent = `KIỂM KÊ - ${category.name}`;
+        document.getElementById('screenTitle').textContent = `${category.name}`;
 
         // Hiển thị/ẩn controls theo vai trò
         const adminControls = document.getElementById('adminControls');
@@ -304,6 +304,14 @@ function backToCategories() {
         const tableContainer = document.getElementById('tableContainer');
         if (tableContainer) {
             tableContainer.innerHTML = '';
+        }
+
+        // Đóng menu nếu đang mở
+        const screenMenu = document.getElementById('screenMenu');
+        const screenTitleBtn = document.getElementById('screenTitleBtn');
+        if (screenMenu && screenTitleBtn) {
+            screenMenu.classList.remove('show');
+            screenTitleBtn.classList.remove('active');
         }
     } catch (error) {
         console.error('Error returning to categories:', error);
@@ -1062,6 +1070,25 @@ function validateFile(input) {
     }
 }
 
+function toggleUserMenu() {
+    const userInfo = document.querySelector('.user-info');
+    const userMenu = document.querySelector('.user-menu');
+    
+    userInfo.classList.toggle('active');
+    userMenu.classList.toggle('show');
+}
+
+// Đóng menu khi click ra ngoài
+document.addEventListener('click', (e) => {
+    const userInfo = document.querySelector('.user-info');
+    const userMenu = document.querySelector('.user-menu');
+    
+    if (!userInfo.contains(e.target)) {
+        userInfo.classList.remove('active');
+        userMenu.classList.remove('show');
+    }
+});
+
 async function deleteCategory(categoryId) {
     try {
         const confirmed = await Dialog.confirm(
@@ -1347,6 +1374,55 @@ document.addEventListener('DOMContentLoaded', function() {
         addCategoryForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             await addCategory();
+        });
+    }
+
+    // Thêm event listener cho user info button
+    const userInfoBtn = document.getElementById('userInfoBtn');
+    const userMenu = document.getElementById('userMenu');
+
+    if (userInfoBtn && userMenu) {
+        userInfoBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            userMenu.classList.toggle('show');
+            userInfoBtn.classList.toggle('active');
+        });
+
+        // Đóng menu khi click ra ngoài
+        document.addEventListener('click', function(e) {
+            if (!userInfoBtn.contains(e.target)) {
+                userMenu.classList.remove('show');
+                userInfoBtn.classList.remove('active');
+            }
+        });
+
+        // Ngăn việc đóng menu khi click vào menu items
+        userMenu.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    }
+
+    const screenTitleBtn = document.getElementById('screenTitleBtn');
+    const screenMenu = document.getElementById('screenMenu');
+
+    if (screenTitleBtn && screenMenu) {
+        screenTitleBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            screenMenu.classList.toggle('show');
+            screenTitleBtn.classList.toggle('active');
+        });
+
+        // Đóng menu khi click ra ngoài
+        document.addEventListener('click', function(e) {
+            if (!screenTitleBtn.contains(e.target)) {
+                screenMenu.classList.remove('show');
+                screenTitleBtn.classList.remove('active');
+            }
+        });
+
+        // Ngăn việc đóng menu khi click vào menu items
+        screenMenu.addEventListener('click', function(e) {
+            e.stopPropagation();
         });
     }
 });
