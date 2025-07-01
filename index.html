@@ -41,31 +41,25 @@
     <div id="categoryScreen" class="screen hide">
         <div class="container">
             <!-- Header -->
-            <!-- Trong index.html -->
-<div class="header">
-    <!-- <div class="header-left">
-        <button onclick="backToRoleSelection()" class="btn back-btn">
-            <i class="fas fa-arrow-left"></i> Quay lại
-        </button>
-    </div> -->
-    <div class="user-profile">
-        <div class="user-info" id="userInfoBtn">
-            <div class="avatar">
-                <i class="fas fa-user"></i>
+            <div class="header">
+                <div class="user-profile">
+                    <div class="user-info" id="userInfoBtn">
+                        <div class="avatar">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <span class="user-role"></span>
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+
+                    <div class="user-menu" id="userMenu">
+                        <div class="menu-item" onclick="backToRoleSelection()">
+                            <i class="fas fa-sign-out-alt"></i>
+                            <span>Quay lại</span>
+                        </div>
+                    </div>
+                </div>
+                <h2>DANH MỤC KIỂM KÊ</h2>
             </div>
-            <span class="user-role"></span>
-            <i class="fas fa-chevron-down"></i>
-        </div>
-        
-        <div class="user-menu" id="userMenu">
-            <div class="menu-item" onclick="backToRoleSelection()">
-                <i class="fas fa-sign-out-alt"></i>
-                <span>Quay lại</span>
-            </div>
-        </div>
-    </div>
-    <h2>DANH MỤC KIỂM KÊ</h2>
-</div>
             <!-- Danh sách danh mục -->
             <div class="category-buttons" id="categoryButtons">
                 <!-- Danh mục sẽ được tải vào đây -->
@@ -88,24 +82,24 @@
         <div class="container">
             <!-- Header -->
             <div class="header">
-            
-            <div class="user-profile">
-                <div class="user-info" id="screenTitleBtn">
-                    <div class="avatar">
-                        <i class="fas fa-clipboard-list"></i>
+
+                <div class="user-profile">
+                    <div class="user-info" id="screenTitleBtn">
+                        <div class="avatar">
+                            <i class="fas fa-clipboard-list"></i>
+                        </div>
+                        <span id="screenTitle" class="screen-title">KIỂM KÊ</span>
+                        <i class="fas fa-chevron-down"></i>
                     </div>
-                    <span id="screenTitle" class="screen-title">KIỂM KÊ</span>
-                    <i class="fas fa-chevron-down"></i>
-                </div>
-                
-                <div class="user-menu" id="screenMenu">
-                    <div class="menu-item" onclick="backToCategories()">
-                        <i class="fas fa-reply"></i>
-                        <span>Quay lại</span>
+
+                    <div class="user-menu" id="screenMenu">
+                        <div class="menu-item" onclick="backToCategories()">
+                            <i class="fas fa-reply"></i>
+                            <span>Quay lại</span>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
 
             <!-- Điều khiển Admin -->
             <div id="adminControls" class="admin-controls hide">

@@ -1327,9 +1327,17 @@ async function saveData() {
             return;
         }
 
+        // Cập nhật thời gian lastUploadTime cho danh mục
+        if (currentCategory && currentCategory.id) {
+            batch.update(categoriesRef.doc(currentCategory.id), {
+                lastUploadTime: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+
         await batch.commit();
         showMessage('Đã lưu dữ liệu thành công', 'success');
         loadInventoryData(currentCategory.id);
+        loadCategories();
 
     } catch (error) {
         console.error('Lỗi lưu dữ liệu:', error);
