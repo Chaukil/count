@@ -598,9 +598,8 @@ td:last-child {
 
     .user-menu {
         width: 100%;
-        max-width: 300px;
+        max-width: 160px;
         left: 50%;
-        transform: translateX(-50%);
     }
 }
 
