@@ -583,11 +583,6 @@ style.textContent = `
 document.head.appendChild(style);
 
 const additionalStyles = `
-    .quantity-input.saved {
-        background-color: #e8f5e9;
-        transition: background-color 0.3s;
-    }
-
     table th {
         white-space: nowrap;
         overflow: hidden;
@@ -1308,22 +1303,44 @@ function createValidFileName(name) {
 // Lưu dữ liệu vào Firebase
 async function saveData() {
     try {
+        showLoading('Đang lưu dữ liệu...');
+        
         const batch = db.batch();
         let updateCount = 0;
 
-        tableData.forEach(item => {
-            if (item.id) {
-                const docRef = inventoryRef.doc(item.id);
-                batch.update(docRef, {
-                    ...item,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                updateCount++;
+        // Lấy tất cả input có dữ liệu
+        const quantityInputs = document.querySelectorAll('.quantity-input');
+        
+        quantityInputs.forEach(input => {
+            const value = input.value.trim();
+            
+            // Chỉ xử lý khi có giá trị
+            if (value !== '' && value !== null && value !== undefined) {
+                const row = input.closest('tr');
+                const itemId = row.dataset.id;
+                const quantity = parseFloat(value) || 0;
+                
+                if (itemId) {
+                    const docRef = inventoryRef.doc(itemId);
+                    batch.update(docRef, {
+                        actualQuantity: quantity,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    
+                    // Cập nhật dữ liệu local
+                    const item = tableData.find(item => item.id === itemId);
+                    if (item) {
+                        item.actualQuantity = quantity;
+                    }
+                    
+                    updateCount++;
+                }
             }
         });
 
         if (updateCount === 0) {
-            showMessage('Không có thay đổi để lưu', 'info');
+            hideLoading();
+            showMessage('Không có dữ liệu để lưu', 'info');
             return;
         }
 
@@ -1335,15 +1352,19 @@ async function saveData() {
         }
 
         await batch.commit();
-        showMessage('Đã lưu dữ liệu thành công', 'success');
-        loadInventoryData(currentCategory.id);
+        hideLoading();
+        showMessage(`Đã lưu ${updateCount} dòng dữ liệu thành công`, 'success');
+        
+        // Cập nhật danh mục
         loadCategories();
 
     } catch (error) {
+        hideLoading();
         console.error('Lỗi lưu dữ liệu:', error);
         showMessage('Lỗi khi lưu dữ liệu', 'error');
     }
 }
+
 
 // Xóa dữ liệu
 async function clearData() {
@@ -1448,6 +1469,11 @@ function renderTable(headers) {
 
 async function updateQuantity(itemId, value) {
     try {
+        if (value === '' || value === null || value === undefined) {
+            console.log('Giá trị rỗng, không lưu');
+            return;
+        }
+
         const quantity = parseFloat(value) || 0;
         
         // Cập nhật trong Firestore
@@ -1460,14 +1486,7 @@ async function updateQuantity(itemId, value) {
         const item = tableData.find(item => item.id === itemId);
         if (item) {
             item.actualQuantity = quantity;
-        }
-
-        // Hiển thị visual feedback
-        const input = document.querySelector(`tr[data-id="${itemId}"] input`);
-        if (input) {
-            input.classList.add('saved');
-            setTimeout(() => input.classList.remove('saved'), 2000);
-        }
+        }        
 
     } catch (error) {
         console.error('Error updating quantity:', error);

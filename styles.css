@@ -387,6 +387,7 @@ th:hover {
 .quantity-input:focus {
     outline: 2px solid #2196F3;
     outline-offset: -2px;
+     background-color: #f8f9fa;
 }
 
 .sortable {
@@ -411,10 +412,6 @@ th:hover {
 tbody tr {
     height: 32px;
     position: relative; /* Thêm position relative */
-}
-
-.quantity-input.modified {
-    background-color: #e8f5e9;
 }
 
 .no-data {
@@ -784,7 +781,11 @@ td:last-child {
         margin: 5px 0;
     }
 
-    
+    .user-menu {
+        width: 100%;
+        max-width: 160px;
+        left: 50%;
+    }    
 }
 .btn::after {
     content: '';
