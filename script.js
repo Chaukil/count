@@ -559,11 +559,15 @@ function renderTableWithVisibility() {
                         <td>${item[header] || ''}</td>
                     `).join('')}
                     <td>
-                        <input type="number" 
-                               class="quantity-input" 
-                               value="${item.actualQuantity || ''}"
-                               onchange="updateQuantity('${item.id}', this.value)">
-                    </td>
+    <input type="number" 
+           class="quantity-input" 
+           value="${item.actualQuantity !== undefined && item.actualQuantity !== null ? item.actualQuantity : 0}"
+           min="0"
+           step="1"
+           onchange="updateQuantity('${item.id}', this.value)"
+           onblur="if(this.value === '') this.value = 0;">
+</td>
+
                 </tr>
             `;
         });
@@ -1593,8 +1597,11 @@ async function exportToExcel() {
                 row[header] = item[header] || '';
             });
 
-            // Thêm số lượng thực tế
-            row['Số lượng thực tế'] = item.actualQuantity || '';
+            // Thêm số lượng thực tế - đảm bảo luôn hiển thị 0 nếu không có giá trị
+            const actualQuantity = item.actualQuantity !== undefined && item.actualQuantity !== null 
+                ? item.actualQuantity 
+                : 0;
+            row['Số lượng thực tế'] = actualQuantity;
 
             return row;
         });
@@ -1618,11 +1625,23 @@ async function exportToExcel() {
         const range = XLSX.utils.decode_range(ws['!ref']);
         for (let C = range.s.c; C <= range.e.c; C++) {
             const address = XLSX.utils.encode_cell({ r: 0, c: C });
-            ws[address].s = {
-                font: { bold: true },
-                alignment: { horizontal: 'center' },
-                fill: { fgColor: { rgb: "CCCCCC" } }
-            };
+            if (ws[address]) {
+                ws[address].s = {
+                    font: { bold: true },
+                    alignment: { horizontal: 'center' },
+                    fill: { fgColor: { rgb: "CCCCCC" } }
+                };
+            }
+        }
+
+        // Format số cho cột "Số lượng thực tế"
+        const actualQtyColIndex = visibleHeaders.length + 1; // STT + visibleHeaders + Số lượng thực tế
+        for (let R = 1; R <= tableData.length; R++) {
+            const cellAddress = XLSX.utils.encode_cell({ r: R, c: actualQtyColIndex });
+            if (ws[cellAddress]) {
+                ws[cellAddress].t = 'n'; // Đảm bảo kiểu số
+                ws[cellAddress].z = '0'; // Format hiển thị số
+            }
         }
 
         // Thêm worksheet vào workbook
@@ -1644,6 +1663,7 @@ async function exportToExcel() {
         showMessage('Lỗi khi xuất Excel', 'error');
     }
 }
+
 
 // Xóa danh mục
 
@@ -2007,7 +2027,6 @@ function createValidFileName(name) {
         .replace(/^_|_$/g, '');
 }
 
-// Lưu dữ liệu vào Firebase
 async function saveData() {
     try {
         showLoading('Đang lưu dữ liệu...');
@@ -2015,33 +2034,31 @@ async function saveData() {
         const batch = db.batch();
         let updateCount = 0;
 
-        // Lấy tất cả input có dữ liệu
+        // Lấy tất cả input
         const quantityInputs = document.querySelectorAll('.quantity-input');
         
         quantityInputs.forEach(input => {
             const value = input.value.trim();
+            const row = input.closest('tr');
+            const itemId = row.dataset.id;
             
-            // Chỉ xử lý khi có giá trị
-            if (value !== '' && value !== null && value !== undefined) {
-                const row = input.closest('tr');
-                const itemId = row.dataset.id;
-                const quantity = parseFloat(value) || 0;
+            if (itemId) {
+                // Chuyển đổi giá trị: rỗng hoặc không hợp lệ = 0
+                const quantity = value === '' || value === null || value === undefined ? 0 : (parseFloat(value) || 0);
                 
-                if (itemId) {
-                    const docRef = inventoryRef.doc(itemId);
-                    batch.update(docRef, {
-                        actualQuantity: quantity,
-                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                    
-                    // Cập nhật dữ liệu local
-                    const item = tableData.find(item => item.id === itemId);
-                    if (item) {
-                        item.actualQuantity = quantity;
-                    }
-                    
-                    updateCount++;
+                const docRef = inventoryRef.doc(itemId);
+                batch.update(docRef, {
+                    actualQuantity: quantity,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                // Cập nhật dữ liệu local
+                const item = tableData.find(item => item.id === itemId);
+                if (item) {
+                    item.actualQuantity = quantity;
                 }
+                
+                updateCount++;
             }
         });
 
@@ -2071,6 +2088,7 @@ async function saveData() {
         showMessage('Lỗi khi lưu dữ liệu', 'error');
     }
 }
+
 
 
 // Xóa dữ liệu
@@ -2176,12 +2194,8 @@ function renderTable(headers) {
 
 async function updateQuantity(itemId, value) {
     try {
-        if (value === '' || value === null || value === undefined) {
-            console.log('Giá trị rỗng, không lưu');
-            return;
-        }
-
-        const quantity = parseFloat(value) || 0;
+        // Chuyển đổi giá trị thành số, nếu rỗng hoặc không hợp lệ thì là 0
+        const quantity = value === '' || value === null || value === undefined ? 0 : (parseFloat(value) || 0);
         
         // Cập nhật trong Firestore
         await inventoryRef.doc(itemId).update({
@@ -2193,13 +2207,16 @@ async function updateQuantity(itemId, value) {
         const item = tableData.find(item => item.id === itemId);
         if (item) {
             item.actualQuantity = quantity;
-        }        
+        }
+
+        console.log(`Updated quantity for ${itemId}: ${quantity}`);
 
     } catch (error) {
         console.error('Error updating quantity:', error);
         showMessage('Lỗi khi cập nhật số lượng', 'error');
     }
 }
+
 let currentHeaders = [];
 function sortTable(column) {
     try {
