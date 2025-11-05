@@ -564,8 +564,9 @@ function renderTableWithVisibility() {
            value="${item.actualQuantity !== undefined && item.actualQuantity !== null ? item.actualQuantity : 0}"
            min="0"
            step="1"
-           onchange="updateQuantity('${item.id}', this.value)"
-           onblur="if(this.value === '') this.value = 0;">
+           onfocus="if(this.value === '0') this.value = '';"
+           onblur="if(this.value === '') this.value = 0;"
+           onchange="updateQuantity('${item.id}', this.value)">
 </td>
 
                 </tr>
