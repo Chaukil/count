@@ -101,39 +101,109 @@
                 </div>
             </div>
 
-            <!-- Điều khiển Admin -->
-            <div id="adminControls" class="admin-controls hide">
-                <div class="file-input-container">
-                    <input type="file" id="fileInput" accept=".xlsx,.xls" onchange="validateFile(this)">
-                    <label for="fileInput" class="btn file-label">
-                        <i class="fas fa-file-excel"></i> Chọn file Excel
-                    </label>
+           <!-- Main Controls (Admin & Inventory) -->
+<div id="mainControls" class="hide">
+    <!-- Data Input Section (ADMIN ONLY) -->
+     <h4 class="section-title admin-feature">
+            <i class="fas fa-database"></i>
+            Nhập Dữ Liệu
+        </h4>
+    <div class="data-input-section admin-feature">
+        
+        <div class="input-options">
+            <!-- Option 1: Upload Excel -->
+            <div class="input-option">
+                <div class="option-icon excel-icon">
+                    <i class="fas fa-file-excel"></i>
                 </div>
-                <button onclick="loadExcel()" class="btn admin-btn">
-                    <i class="fas fa-upload"></i> Tải Excel
-                </button>
-                <button onclick="clearData()" class="btn delete-btn">
-                    <i class="fas fa-trash"></i> Xóa dữ liệu
-                </button>
-                <button onclick="exportToExcel()" class="btn export-btn">
-                    <i class="fas fa-download"></i> Xuất Excel
-                </button>
+                <div class="option-content">
+                    <h5>Tải file Excel</h5>
+                    <p>Chọn file .xlsx hoặc .xls từ máy tính</p>
+                    <div class="file-input-wrapper">
+                        <input type="file" id="fileInput" accept=".xlsx,.xls" onchange="validateFile(this)">
+                        <label for="fileInput" class="btn btn-outline">
+                            <i class="fas fa-folder-open"></i>
+                            Chọn file
+                        </label>
+                    </div>
+                    <div id="fileInfo" class="file-info hide">
+                        <div class="file-details">
+                            <i class="fas fa-file-excel file-icon"></i>
+                            <div class="file-text">
+                                <span class="file-name"></span>
+                                <span class="file-size"></span>
+                            </div>
+                            <button onclick="clearFileSelection()" class="btn-clear-file" title="Xóa file">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <button onclick="loadExcel()" class="btn btn-primary" id="uploadBtn" disabled>
+                        <i class="fas fa-upload"></i>
+                        Tải lên
+                    </button>
+                </div>
             </div>
-
-            <!-- Điều khiển chung -->
-            <div id="commonControls" class="control-group">
-                <button onclick="showColumnVisibilityModal()" class="btn action-btn">
-                    <i class="fas fa-columns"></i> Ẩn/Hiện Cột
-                </button>
-                <button onclick="saveData()" class="btn save-btn">
-                    <i class="fas fa-save"></i> Lưu Dữ Liệu
-                </button>
+            <!-- Divider -->
+            <div class="option-divider">
+                <span>HOẶC</span>
             </div>
-
-            <!-- Bảng dữ liệu -->
+            <!-- Option 2: Paste Data -->
+            <div class="input-option">
+                <div class="option-icon paste-icon">
+                    <i class="fas fa-paste"></i>
+                </div>
+                <div class="option-content">
+                    <h5>Paste từ Excel</h5>
+                    <p>Copy dữ liệu từ Excel và paste trực tiếp</p>
+                    <button onclick="showPasteDataModal()" class="btn btn-outline">
+                        <i class="fas fa-clipboard"></i>
+                        Mở Paste
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div></br>
+    
+    <!-- Data Management Section (MIXED ROLES) -->
+     <h4 class="section-title">
+        <i class="fas fa-tools"></i>
+            Chức năng
+            <div id="dataStats" class="data-stats hide">
+                <span class="stat-badge">
+                    <i class="fas fa-database"></i>
+                    <strong id="totalRows">0</strong> dòng
+                </span>
+            </div>
+        </h4>
+    <div class="data-management-section">
+        
+        <div class="management-buttons">
+            <!-- Common Buttons -->
+            <button onclick="showColumnVisibilityModal()" class="btn action-btn">
+                <i class="fas fa-columns"></i> Ẩn/Hiện Cột
+            </button>
+            <button onclick="saveData()" class="btn save-btn">
+                <i class="fas fa-save"></i> Lưu Dữ Liệu
+            </button>
+            <!-- Admin Only Buttons -->
+            <button onclick="exportToExcel()" class="btn btn-success admin-feature">
+                <i class="fas fa-download"></i>
+                Xuất Excel
+            </button>
+            <button onclick="clearData()" class="btn btn-danger admin-feature">
+                <i class="fas fa-trash-alt"></i>
+                Xóa dữ liệu
+            </button>
+        </div>
+    </div>
+<!-- Bảng dữ liệu -->
             <div class="table-container">
                 <div id="tableContainer"></div>
             </div>
+</div>
+
+            
         </div>
     </div>
 
@@ -177,6 +247,27 @@
         </div>
     </div>
 
+    <div id="adminPasswordModal" class="modal hide">
+    <div class="modal-content">
+        <h3>Xác thực Quản trị viên</h3>
+        <form id="adminPasswordForm">
+            <div class="form-group">
+                <label for="adminPassword">Mật khẩu:</label>
+                <input type="password" id="adminPassword" required autocomplete="off">
+                <small class="password-hint">Nhập mật khẩu để truy cập chức năng quản trị</small>
+            </div>
+            <div class="modal-buttons">
+                <button type="submit" class="btn admin-btn">
+                    <i class="fas fa-unlock"></i> Xác nhận
+                </button>
+                <button type="button" onclick="cancelAdminLogin()" class="btn cancel-btn">
+                    <i class="fas fa-times"></i> Hủy
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
     <!-- Modal ẩn/hiện cột -->
     <div id="columnVisibilityModal" class="modal hide">
         <div class="modal-content">
@@ -194,6 +285,72 @@
             </div>
         </div>
     </div>
+
+    <!-- Modal Paste Dữ Liệu -->
+<div id="pasteDataModal" class="modal hide">
+    <div class="modal-content paste-modal">
+        <div class="paste-header">
+            <h3>Paste Dữ Liệu từ Excel</h3>
+            <button class="dialog-close" onclick="closeModal('pasteDataModal')">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <div class="paste-instructions">
+            <div class="instruction-item">
+                <i class="fas fa-info-circle"></i>
+                <span>Sao chép dữ liệu từ Excel (bao gồm cả tiêu đề cột)</span>
+            </div>
+            <div class="instruction-item">
+                <i class="fas fa-mouse-pointer"></i>
+                <span>Click vào ô bên dưới và nhấn <kbd>Ctrl+V</kbd> (hoặc <kbd>Cmd+V</kbd> trên Mac)</span>
+            </div>
+            <div class="instruction-item">
+                <i class="fas fa-check-circle"></i>
+                <span>Hệ thống sẽ tự động phát hiện cột và dữ liệu</span>
+            </div>
+        </div>
+
+        <div class="paste-area-container">
+            <textarea 
+                id="pasteArea" 
+                class="paste-textarea" 
+                placeholder="Click vào đây và nhấn Ctrl+V để paste dữ liệu từ Excel..."
+                rows="10"></textarea>
+            <div class="paste-stats hide" id="pasteStats">
+                <span class="stat-item">
+                    <i class="fas fa-columns"></i>
+                    <strong id="columnCount">0</strong> cột
+                </span>
+                <span class="stat-item">
+                    <i class="fas fa-list"></i>
+                    <strong id="rowCount">0</strong> dòng
+                </span>
+            </div>
+        </div>
+
+        <div id="previewContainer" class="preview-container hide">
+            <h4>Xem trước dữ liệu:</h4>
+            <div class="preview-table-wrapper">
+                <table id="previewTable" class="preview-table">
+                    <!-- Preview data will be inserted here -->
+                </table>
+            </div>
+        </div>
+
+        <div class="modal-buttons">
+            <button onclick="processPastedData()" class="btn admin-btn" id="confirmPasteBtn" disabled>
+                <i class="fas fa-check"></i> Xác nhận & Tải lên
+            </button>
+            <button onclick="clearPasteArea()" class="btn action-btn" id="clearPasteBtn" disabled>
+                <i class="fas fa-eraser"></i> Xóa
+            </button>
+            <button onclick="closeModal('pasteDataModal')" class="btn cancel-btn">
+                <i class="fas fa-times"></i> Hủy
+            </button>
+        </div>
+    </div>
+</div>
 
     <div id="dialogModal" class="dialog-modal hide">
         <div class="dialog-content">

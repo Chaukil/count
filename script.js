@@ -20,10 +20,16 @@ let tableData = [];
 let columnVisibility = {};
 let currentSortColumn = null;
 let currentSortDirection = 'asc';
+let isAdminAuthenticated = false;
+let pastedDataCache = {
+    headers: [],
+    rows: []
+};
 
 // Collections reference
 const categoriesRef = db.collection('categories');
 const inventoryRef = db.collection('inventory');
+const ADMIN_PASSWORD = "71270";
 
 // Tải danh sách danh mục từ Firebase
 async function loadCategories() {
@@ -91,6 +97,117 @@ function formatTimestamp(timestamp) {
     }).format(date);
 }
 
+function showAdminPasswordModal() {
+    const modal = document.getElementById('adminPasswordModal');
+    const passwordInput = document.getElementById('adminPassword');
+    
+    if (!modal || !passwordInput) {
+        console.error('Admin password modal not found');
+        return;
+    }
+
+    // Reset form
+    passwordInput.value = '';
+    
+    // Xóa error message nếu có
+    const errorMsg = modal.querySelector('.password-error');
+    if (errorMsg) {
+        errorMsg.remove();
+    }
+
+    // Hiển thị modal
+    modal.style.display = 'flex';
+    modal.classList.remove('hide');
+    
+    // Focus vào input
+    setTimeout(() => passwordInput.focus(), 100);
+}
+
+async function handleAdminPasswordSubmit(event) {
+    event.preventDefault();
+    
+    const passwordInput = document.getElementById('adminPassword');
+    const password = passwordInput.value;
+    const modal = document.getElementById('adminPasswordModal');
+
+    // Xóa error message cũ
+    let errorMsg = modal.querySelector('.password-error');
+    if (errorMsg) {
+        errorMsg.remove();
+    }
+
+    // Kiểm tra mật khẩu
+    if (password === ADMIN_PASSWORD) {
+        isAdminAuthenticated = true;
+        closeModal('adminPasswordModal');
+        
+        // Tiếp tục với quy trình chọn vai trò admin
+        proceedWithAdminRole();
+        
+        showMessage('Đăng nhập thành công', 'success');
+    } else {
+        // Hiển thị lỗi
+        errorMsg = document.createElement('small');
+        errorMsg.className = 'password-error show';
+        errorMsg.textContent = 'Mật khẩu không chính xác';
+        
+        const formGroup = passwordInput.closest('.form-group');
+        formGroup.appendChild(errorMsg);
+        
+        // Làm rỗng input và focus lại
+        passwordInput.value = '';
+        passwordInput.focus();
+        
+        // Thêm hiệu ứng shake
+        modal.querySelector('.modal-content').style.animation = 'shake 0.5s';
+        setTimeout(() => {
+            modal.querySelector('.modal-content').style.animation = '';
+        }, 500);
+    }
+}
+
+function cancelAdminLogin() {
+    closeModal('adminPasswordModal');
+    isAdminAuthenticated = false;
+}
+
+function proceedWithAdminRole() {
+    try {
+        console.log('Proceeding with admin role');
+        currentRole = 'admin';
+        document.body.classList.add('role-admin'); // Thêm class cho body
+        document.body.classList.remove('role-inventory');
+
+        // Ẩn màn hình chọn vai trò
+        document.getElementById('roleScreen').classList.add('hide');
+
+        // Hiển thị màn hình danh mục
+        const categoryScreen = document.getElementById('categoryScreen');
+        if (categoryScreen) {
+            categoryScreen.classList.remove('hide');
+        }
+
+        // Cập nhật hiển thị vai trò
+        const userRoleElement = document.querySelector('.user-role');
+        if (userRoleElement) {
+            userRoleElement.textContent = 'Quản trị viên';
+        }
+
+        // Hiển thị controls admin trên màn hình danh mục
+        const categoryAdminControls = document.getElementById('categoryAdminControls');
+        if (categoryAdminControls) {
+            categoryAdminControls.classList.remove('hide');
+        }
+
+        // Tải danh sách danh mục
+        loadCategories();
+
+    } catch (error) {
+        console.error('Error proceeding with admin role:', error);
+        showMessage('Lỗi khi truy cập chức năng quản trị', 'error');
+    }
+}
+
 async function selectCategory(category) {
     try {
         console.log('Selecting category:', category);
@@ -106,16 +223,10 @@ async function selectCategory(category) {
         // Cập nhật tiêu đề
         document.getElementById('screenTitle').textContent = `${category.name}`;
 
-        // Hiển thị/ẩn controls theo vai trò
-        const adminControls = document.getElementById('adminControls');
-        if (adminControls) {
-            adminControls.classList.toggle('hide', currentRole !== 'admin');
-        }
-
-        // Hiển thị controls chung
-        const commonControls = document.getElementById('commonControls');
-        if (commonControls) {
-            commonControls.classList.remove('hide');
+        // Hiển thị container điều khiển chính
+        const mainControls = document.getElementById('mainControls');
+        if (mainControls) {
+            mainControls.classList.remove('hide');
         }
 
         // Tải dữ liệu kiểm kê
@@ -145,6 +256,7 @@ async function backToRoleSelection() {
         columnVisibility = {};
         currentSortColumn = null;
         currentSortDirection = 'asc';
+        isAdminAuthenticated = false;
 
         // Ẩn màn hình danh mục
         document.getElementById('categoryScreen').classList.add('hide');
@@ -384,10 +496,32 @@ function renderTableWithVisibility() {
         const tableContainer = document.getElementById('tableContainer');
         if (!tableContainer) return;
 
-        // Nếu không có dữ liệu hoặc headers
+        // Empty state khi chưa có dữ liệu
         if (!tableData || !Array.isArray(tableData) || tableData.length === 0 || 
             !currentHeaders || !Array.isArray(currentHeaders) || currentHeaders.length === 0) {
-            tableContainer.innerHTML = '<p class="no-data">Chưa có dữ liệu kiểm kê</p>';
+            
+            tableContainer.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">
+                        <i class="fas fa-inbox"></i>
+                    </div>
+                    <h3>Chưa có dữ liệu</h3>
+                    <p>Hãy tải dữ liệu từ file Excel hoặc paste trực tiếp từ Excel</p>
+                    <div class="empty-actions">
+                        <button onclick="document.getElementById('fileInput').click()" class="btn btn-primary">
+                            <i class="fas fa-file-upload"></i>
+                            Tải file Excel
+                        </button>
+                        <button onclick="showPasteDataModal()" class="btn btn-outline">
+                            <i class="fas fa-paste"></i>
+                            Paste dữ liệu
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            // Ẩn stats
+            updateDataStats();
             return;
         }
 
@@ -445,12 +579,29 @@ function renderTableWithVisibility() {
             });
         });
 
+        // Cập nhật stats
+        updateDataStats();
+
     } catch (error) {
         console.error('Error rendering table:', error);
         showMessage('Lỗi khi hiển thị bảng dữ liệu', 'error');
     }
 }
 
+// Hàm mới: Cập nhật thống kê dữ liệu
+function updateDataStats() {
+    const dataStats = document.getElementById('dataStats');
+    const totalRowsEl = document.getElementById('totalRows');
+
+    if (dataStats && totalRowsEl) {
+        if (tableData && tableData.length > 0) {
+            totalRowsEl.textContent = tableData.length;
+            dataStats.classList.remove('hide');
+        } else {
+            dataStats.classList.add('hide');
+        }
+    }
+}
 
 // Thêm danh mục mới vào Firebase
 async function addCategory() {
@@ -540,6 +691,468 @@ function closeModal(modalId) {
         modal.classList.add('hide');
     }
 }
+
+function showPasteDataModal() {
+    try {
+        const modal = document.getElementById('pasteDataModal');
+        const pasteArea = document.getElementById('pasteArea');
+        document.addEventListener('keydown', handlePasteModalKeyboard);
+        
+        if (!modal || !pasteArea) {
+            throw new Error('Paste modal elements not found');
+        }
+
+        // Reset modal
+        clearPasteArea();
+
+        // Hiển thị modal
+        modal.style.display = 'flex';
+        modal.classList.remove('hide');
+
+        // Focus vào textarea
+        setTimeout(() => pasteArea.focus(), 100);
+
+        // Thêm event listener cho paste
+        pasteArea.addEventListener('paste', handlePasteEvent);
+        pasteArea.addEventListener('input', handlePasteInput);
+
+    } catch (error) {
+        console.error('Error showing paste modal:', error);
+        showMessage('Lỗi khi mở form paste dữ liệu', 'error');
+    }
+}
+
+function handlePasteModalKeyboard(e) {
+    const modal = document.getElementById('pasteDataModal');
+    if (!modal || modal.classList.contains('hide')) return;
+
+    // ESC để đóng
+    if (e.key === 'Escape') {
+        closeModal('pasteDataModal');
+    }
+
+    // Ctrl+Enter để xác nhận
+    if (e.ctrlKey && e.key === 'Enter') {
+        const confirmBtn = document.getElementById('confirmPasteBtn');
+        if (confirmBtn && !confirmBtn.disabled) {
+            processPastedData();
+        }
+    }
+}
+
+const originalCloseModalUpdated = closeModal;
+closeModal = function(modalId) {
+    if (modalId === 'pasteDataModal') {
+        document.removeEventListener('keydown', handlePasteModalKeyboard);
+    }
+    originalCloseModalUpdated(modalId);
+};
+
+function handlePasteEvent(e) {
+    e.preventDefault();
+    
+    const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+    const pasteArea = document.getElementById('pasteArea');
+    
+    if (pastedText) {
+        pasteArea.value = pastedText;
+        pasteArea.classList.add('has-data');
+        
+        // Parse và hiển thị preview
+        parseAndPreviewData(pastedText);
+    }
+}
+
+// Hàm xử lý input thủ công
+function handlePasteInput(e) {
+    const pasteArea = e.target;
+    const text = pasteArea.value;
+
+    if (text.trim()) {
+        pasteArea.classList.add('has-data');
+        parseAndPreviewData(text);
+    } else {
+        clearPasteArea();
+    }
+}
+
+// Hàm parse và preview dữ liệu
+function parseAndPreviewData(text) {
+    try {
+        // Clean dữ liệu
+        text = cleanPastedData(text);
+
+        if (!text) {
+            showPasteError('Không có dữ liệu để xử lý');
+            return;
+        }
+
+        // Tách thành các dòng
+        const lines = text.split('\n').filter(line => line.trim());
+
+        if (lines.length === 0) {
+            showPasteError('Không có dữ liệu để xử lý');
+            return;
+        }
+
+        if (lines.length < 2) {
+            showPasteError('Cần ít nhất 2 dòng (1 dòng header + 1 dòng dữ liệu)');
+            return;
+        }
+
+        // Phát hiện delimiter
+        const delimiter = detectDelimiter(lines);
+        console.log('Detected delimiter:', delimiter === '\t' ? 'TAB' : delimiter);
+
+        // Parse header
+        const headers = delimiter === '\t' 
+            ? parseLineByTab(lines[0])
+            : parseLineByDelimiter(lines[0], delimiter);
+
+        // Lọc bỏ header rỗng
+        const validHeaders = headers.filter(h => h.trim());
+
+        if (validHeaders.length === 0) {
+            showPasteError('Không tìm thấy tiêu đề cột hợp lệ');
+            return;
+        }
+
+        console.log('Headers found:', validHeaders);
+
+        // Parse các dòng dữ liệu
+        const rows = [];
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            
+            // Bỏ qua dòng trống
+            if (!line) continue;
+
+            // Parse cells
+            const cells = delimiter === '\t'
+                ? parseLineByTab(line)
+                : parseLineByDelimiter(line, delimiter);
+
+            // Tạo object từ cells
+            const row = {};
+            let hasData = false;
+
+            validHeaders.forEach((header, index) => {
+                const cellValue = (cells[index] || '').trim();
+                row[header] = cellValue;
+                if (cellValue) hasData = true;
+            });
+
+            // Chỉ thêm dòng có dữ liệu
+            if (hasData) {
+                rows.push(row);
+            }
+        }
+
+        // Kiểm tra có dữ liệu không
+        if (rows.length === 0) {
+            showPasteError('Không có dữ liệu sau dòng tiêu đề');
+            return;
+        }
+
+        console.log('Parsed rows:', rows.length);
+
+        // Lưu vào cache
+        pastedDataCache = {
+            headers: validHeaders,
+            rows: rows
+        };
+
+        // Hiển thị thống kê
+        updatePasteStats(validHeaders.length, rows.length);
+
+        // Hiển thị preview
+        showDataPreview(validHeaders, rows);
+
+        // Enable nút xác nhận
+        document.getElementById('confirmPasteBtn').disabled = false;
+        document.getElementById('clearPasteBtn').disabled = false;
+
+        // Hiệu ứng thành công
+        const pasteArea = document.getElementById('pasteArea');
+        pasteArea.classList.add('success');
+        setTimeout(() => pasteArea.classList.remove('success'), 500);
+
+    } catch (error) {
+        console.error('Error parsing pasted data:', error);
+        showPasteError('Lỗi khi phân tích dữ liệu. Vui lòng kiểm tra định dạng.');
+    }
+}
+
+// Hàm cập nhật thống kê
+function updatePasteStats(columnCount, rowCount) {
+    const stats = document.getElementById('pasteStats');
+    const columnCountEl = document.getElementById('columnCount');
+    const rowCountEl = document.getElementById('rowCount');
+
+    if (stats && columnCountEl && rowCountEl) {
+        columnCountEl.textContent = columnCount;
+        rowCountEl.textContent = rowCount;
+        stats.classList.remove('hide');
+    }
+}
+
+// Hàm hiển thị preview dữ liệu
+function showDataPreview(headers, rows) {
+    const previewContainer = document.getElementById('previewContainer');
+    const previewTable = document.getElementById('previewTable');
+
+    if (!previewContainer || !previewTable) return;
+
+    // Tạo header
+    let html = '<thead><tr>';
+    html += '<th class="row-number">#</th>';
+    headers.forEach(header => {
+        html += `<th>${escapeHtml(header)}</th>`;
+    });
+    html += '</tr></thead>';
+
+    // Tạo body (hiển thị tối đa 10 dòng đầu)
+    html += '<tbody>';
+    const previewRows = rows.slice(0, 10);
+    previewRows.forEach((row, index) => {
+        html += '<tr>';
+        html += `<td class="row-number">${index + 1}</td>`;
+        headers.forEach(header => {
+            html += `<td>${escapeHtml(row[header] || '')}</td>`;
+        });
+        html += '</tr>';
+    });
+    html += '</tbody>';
+
+    if (rows.length > 10) {
+        html += '<tfoot><tr><td colspan="' + (headers.length + 1) + '" style="text-align: center; color: #666; font-style: italic;">... và ' + (rows.length - 10) + ' dòng nữa</td></tr></tfoot>';
+    }
+
+    previewTable.innerHTML = html;
+    previewContainer.classList.remove('hide');
+}
+
+// Hàm escape HTML để tránh XSS
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Hàm hiển thị lỗi paste
+function showPasteError(message) {
+    const previewContainer = document.getElementById('previewContainer');
+    
+    const errorHtml = `
+        <div class="paste-error">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span>${message}</span>
+        </div>
+    `;
+
+    previewContainer.innerHTML = errorHtml;
+    previewContainer.classList.remove('hide');
+
+    // Disable nút xác nhận
+    document.getElementById('confirmPasteBtn').disabled = true;
+}
+
+// Hàm xóa paste area
+function clearPasteArea() {
+    const pasteArea = document.getElementById('pasteArea');
+    const previewContainer = document.getElementById('previewContainer');
+    const pasteStats = document.getElementById('pasteStats');
+    const confirmBtn = document.getElementById('confirmPasteBtn');
+    const clearBtn = document.getElementById('clearPasteBtn');
+
+    if (pasteArea) {
+        pasteArea.value = '';
+        pasteArea.classList.remove('has-data', 'success');
+    }
+
+    if (previewContainer) {
+        previewContainer.classList.add('hide');
+        previewContainer.innerHTML = '';
+    }
+
+    if (pasteStats) {
+        pasteStats.classList.add('hide');
+    }
+
+    if (confirmBtn) {
+        confirmBtn.disabled = true;
+    }
+
+    if (clearBtn) {
+        clearBtn.disabled = true;
+    }
+
+    // Reset cache
+    pastedDataCache = {
+        headers: [],
+        rows: []
+    };
+}
+
+// Hàm xử lý dữ liệu đã paste
+async function processPastedData() {
+    try {
+        if (!pastedDataCache.headers.length || !pastedDataCache.rows.length) {
+            showMessage('Không có dữ liệu để xử lý', 'error');
+            return;
+        }
+
+        // Xác nhận trước khi tải lên
+        const confirmed = await Dialog.confirm(
+            `Bạn có chắc muốn tải lên ${pastedDataCache.rows.length} dòng dữ liệu?`,
+            'Xác nhận tải dữ liệu'
+        );
+
+        if (!confirmed) return;
+
+        showLoading(`Đang tải ${pastedDataCache.rows.length} dòng dữ liệu...`);
+
+        const { headers, rows } = pastedDataCache;
+
+        // Lưu headers vào state
+        currentHeaders = headers;
+
+        // Xóa dữ liệu cũ
+        const snapshot = await inventoryRef
+            .where('categoryId', '==', currentCategory.id)
+            .get();
+
+        const batch = db.batch();
+        snapshot.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+
+        // Cập nhật thời gian cho danh mục
+        batch.update(categoriesRef.doc(currentCategory.id), {
+            lastUploadTime: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Thêm dữ liệu mới
+        rows.forEach(row => {
+            const docRef = inventoryRef.doc();
+            const formattedItem = {
+                categoryId: currentCategory.id,
+                headers: headers,
+                data: {},
+                actualQuantity: 0,
+                uploadedAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            headers.forEach(header => {
+                formattedItem.data[header] = row[header] || '';
+            });
+
+            batch.set(docRef, formattedItem);
+        });
+
+        await batch.commit();
+        hideLoading();
+
+        // Đóng modal
+        closeModal('pasteDataModal');
+
+        // Hiển thị thông báo thành công
+        await Dialog.success(
+            `Đã tải thành công ${rows.length} dòng dữ liệu`,
+            'Thành công'
+        );
+
+        // Tải lại dữ liệu
+        await loadCategories();
+        await loadInventoryData(currentCategory.id);
+
+    } catch (error) {
+        hideLoading();
+        console.error('Error processing pasted data:', error);
+        await Dialog.error('Lỗi khi tải dữ liệu lên hệ thống');
+    }
+}
+
+function cleanPastedData(text) {
+    // Normalize line breaks
+    text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    
+    // Xóa các dòng trống ở đầu và cuối
+    text = text.trim();
+    
+    return text;
+}
+
+// Hàm phát hiện delimiter (tab, comma, etc.)
+function detectDelimiter(lines) {
+    // Ưu tiên tab trước vì Excel copy thường dùng tab
+    const firstLine = lines[0];
+    
+    // Đếm số tab
+    const tabCount = (firstLine.match(/\t/g) || []).length;
+    
+    if (tabCount > 0) {
+        return '\t';
+    }
+    
+    // Nếu không có tab, kiểm tra delimiter khác
+    const delimiters = [',', ';', '|'];
+    let maxCount = 0;
+    let detectedDelimiter = ',';
+
+    delimiters.forEach(delimiter => {
+        const count = (firstLine.match(new RegExp('\\' + delimiter, 'g')) || []).length;
+        if (count > maxCount) {
+            maxCount = count;
+            detectedDelimiter = delimiter;
+        }
+    });
+
+    return maxCount > 0 ? detectedDelimiter : '\t';
+}
+
+function parseLineByTab(line) {
+    return line.split('\t').map(cell => cell.trim());
+}
+
+function parseLineByDelimiter(line, delimiter) {
+    // Xử lý trường hợp có quote
+    const cells = [];
+    let currentCell = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        
+        if (char === '"') {
+            inQuotes = !inQuotes;
+        } else if (char === delimiter && !inQuotes) {
+            cells.push(currentCell.trim());
+            currentCell = '';
+        } else {
+            currentCell += char;
+        }
+    }
+    
+    // Thêm cell cuối cùng
+    cells.push(currentCell.trim());
+    
+    return cells;
+}
+
+// Cập nhật hàm closeModal để cleanup event listeners
+const originalCloseModal = closeModal;
+closeModal = function(modalId) {
+    if (modalId === 'pasteDataModal') {
+        const pasteArea = document.getElementById('pasteArea');
+        if (pasteArea) {
+            pasteArea.removeEventListener('paste', handlePasteEvent);
+            pasteArea.removeEventListener('input', handlePasteInput);
+        }
+        clearPasteArea();
+    }
+    originalCloseModal(modalId);
+};
 
 function showMessage(message, type = 'info') {
     const messageDiv = document.createElement('div');
@@ -1037,32 +1650,125 @@ async function exportToExcel() {
 function validateFile(input) {
     try {
         const file = input.files[0];
-        if (!file) return;
+        const fileInfo = document.getElementById('fileInfo');
+        const uploadBtn = document.getElementById('uploadBtn');
+
+        if (!file) {
+            hideFileInfo();
+            return false;
+        }
 
         const fileName = file.name.toLowerCase();
         const validExtensions = ['.xlsx', '.xls'];
         const isValidExtension = validExtensions.some(ext => fileName.endsWith(ext));
 
+        // Kiểm tra định dạng file
         if (!isValidExtension) {
-            showMessage('Vui lòng chọn file Excel (.xlsx hoặc .xls)', 'error');
-            input.value = ''; // Reset input
+            showFileError('Vui lòng chọn file Excel (.xlsx hoặc .xls)');
+            input.value = '';
+            hideFileInfo();
             return false;
         }
 
-        // Kiểm tra kích thước file (ví dụ: giới hạn 5MB)
-        const maxSize = 5 * 1024 * 1024; // 5MB
+        // Kiểm tra kích thước file (giới hạn 10MB)
+        const maxSize = 10 * 1024 * 1024; // 10MB
         if (file.size > maxSize) {
-            showMessage('File không được vượt quá 5MB', 'error');
+            showFileError('File không được vượt quá 10MB');
             input.value = '';
+            hideFileInfo();
             return false;
+        }
+
+        // Hiển thị thông tin file
+        showFileInfo(file);
+        
+        // Enable nút upload
+        if (uploadBtn) {
+            uploadBtn.disabled = false;
         }
 
         return true;
+
     } catch (error) {
         console.error('Error validating file:', error);
         showMessage('Lỗi khi kiểm tra file', 'error');
         return false;
     }
+}
+
+function hideFileInfo() {
+    const fileInfo = document.getElementById('fileInfo');
+    const uploadBtn = document.getElementById('uploadBtn');
+
+    if (fileInfo) {
+        fileInfo.classList.add('hide');
+        fileInfo.classList.remove('valid', 'invalid');
+    }
+
+    if (uploadBtn) {
+        uploadBtn.disabled = true;
+    }
+}
+
+function showFileError(message) {
+    const fileInfo = document.getElementById('fileInfo');
+    if (!fileInfo) return;
+
+    const fileName = fileInfo.querySelector('.file-name');
+    const fileSize = fileInfo.querySelector('.file-size');
+
+    if (fileName && fileSize) {
+        fileName.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${message}`;
+        fileSize.textContent = '';
+    }
+
+    fileInfo.classList.remove('hide', 'valid');
+    fileInfo.classList.add('invalid');
+    
+    showMessage(message, 'error');
+}
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+}
+
+function clearFileSelection() {
+    const fileInput = document.getElementById('fileInput');
+    const uploadBtn = document.getElementById('uploadBtn');
+
+    if (fileInput) {
+        fileInput.value = '';
+    }
+
+    hideFileInfo();
+
+    if (uploadBtn) {
+        uploadBtn.disabled = true;
+    }
+
+    showMessage('Đã xóa file đã chọn', 'info');
+}
+
+function showFileInfo(file) {
+    const fileInfo = document.getElementById('fileInfo');
+    if (!fileInfo) return;
+
+    const fileName = fileInfo.querySelector('.file-name');
+    const fileSize = fileInfo.querySelector('.file-size');
+
+    if (fileName && fileSize) {
+        fileName.textContent = file.name;
+        fileSize.textContent = formatFileSize(file.size);
+    }
+
+    fileInfo.classList.remove('hide', 'invalid');
+    fileInfo.classList.add('valid');
 }
 
 function toggleUserMenu() {
@@ -1188,7 +1894,7 @@ async function loadExcel() {
                 // Chuyển đổi dữ liệu theo headers
                 const jsonData = XLSX.utils.sheet_to_json(firstSheet, {
                     header: headers,
-                    range: 1 // Bắt đầu từ dòng sau header
+                    range: 1
                 });
 
                 if (jsonData.length === 0) {
@@ -1208,22 +1914,21 @@ async function loadExcel() {
                 });
 
                 // Cập nhật thời gian cho danh mục
-        batch.update(categoriesRef.doc(currentCategory.id), {
-            lastUploadTime: firebase.firestore.FieldValue.serverTimestamp()
-        });
+                batch.update(categoriesRef.doc(currentCategory.id), {
+                    lastUploadTime: firebase.firestore.FieldValue.serverTimestamp()
+                });
 
-                // Thêm dữ liệu mới với cấu trúc cột
+                // Thêm dữ liệu mới
                 jsonData.forEach(item => {
                     const docRef = inventoryRef.doc();
                     const formattedItem = {
                         categoryId: currentCategory.id,
-                        headers: headers, // Lưu thứ tự cột
-                        data: {}, // Dữ liệu theo từng cột
-                        actualQuantity: 0, // Số lượng thực tế
+                        headers: headers,
+                        data: {},
+                        actualQuantity: 0,
                         uploadedAt: firebase.firestore.FieldValue.serverTimestamp()
                     };
 
-                    // Lưu dữ liệu theo đúng cột
                     headers.forEach(header => {
                         formattedItem.data[header] = item[header] || '';
                     });
@@ -1233,8 +1938,12 @@ async function loadExcel() {
 
                 await batch.commit();
                 hideLoading();
-                showMessage('Đã tải dữ liệu Excel thành công', 'success');
-                 await loadCategories();
+                
+                // Reset file selection sau khi upload thành công
+                clearFileSelection();
+                
+                showMessage(`Đã tải thành công ${jsonData.length} dòng dữ liệu`, 'success');
+                await loadCategories();
                 await loadInventoryData(currentCategory.id);
 
             } catch (error) {
@@ -1257,8 +1966,6 @@ async function loadExcel() {
         showMessage('Lỗi khi tải file Excel', 'error');
     }
 }
-
-
 function showLoading(message = 'Đang xử lý...') {
     const loadingHtml = `
         <div class="loading-overlay">
@@ -1591,6 +2298,11 @@ async function initializeApp() {
             manageCategoriesBtn.addEventListener('click', showManageCategoriesModal);
         }
 
+        const adminPasswordForm = document.getElementById('adminPasswordForm');
+        if (adminPasswordForm) {
+            adminPasswordForm.addEventListener('submit', handleAdminPasswordSubmit);
+        }
+
         console.log('App initialized successfully');
     } catch (error) {
         console.error('Error initializing app:', error);
@@ -1810,7 +2522,17 @@ function closeEditModal() {
 function selectRole(role) {
     try {
         console.log('Selecting role:', role);
+        
+        if (role === 'admin') {
+            // Yêu cầu xác thực mật khẩu cho admin
+            showAdminPasswordModal();
+            return;
+        }
+        
+        // Với vai trò inventory, tiếp tục như cũ
         currentRole = role;
+        document.body.classList.add('role-inventory'); // Thêm class cho body
+        document.body.classList.remove('role-admin');
 
         // Ẩn màn hình chọn vai trò
         document.getElementById('roleScreen').classList.add('hide');
@@ -1824,21 +2546,22 @@ function selectRole(role) {
         // Cập nhật hiển thị vai trò
         const userRoleElement = document.querySelector('.user-role');
         if (userRoleElement) {
-            userRoleElement.textContent = role === 'admin' ? 'Quản trị viên' : 'Kiểm kê viên';
+            userRoleElement.textContent = 'Kiểm kê viên';
         }
 
-        // Hiển thị/ẩn controls admin
-        const adminControls = document.getElementById('categoryAdminControls');
-        if (adminControls) {
-            adminControls.classList.toggle('hide', role !== 'admin');
+        // Ẩn controls admin trên màn hình danh mục
+        const categoryAdminControls = document.getElementById('categoryAdminControls');
+        if (categoryAdminControls) {
+            categoryAdminControls.classList.add('hide');
         }
 
         // Tải danh sách danh mục
         loadCategories();
 
-        console.log('Role selection completed:', role);
     } catch (error) {
         console.error('Error selecting role:', error);
         showMessage('Lỗi khi chọn vai trò', 'error');
     }
 }
+
+
