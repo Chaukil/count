@@ -531,47 +531,45 @@ function renderTableWithVisibility() {
         );
 
         // Tạo HTML cho bảng
-        let html = `
-            <table>
-                <thead>
-                    <tr>
-                        <th>STT</th>
-                        ${visibleHeaders.map(header => `
-                            <th class="sortable" data-column="${header}">
-                                ${header}
-                                <span class="sort-icon ${
-                                    currentSortColumn === header ? currentSortDirection : ''
-                                }"></span>
-                            </th>
-                        `).join('')}
-                        <th>Số lượng thực tế</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
+        // Tạo HTML cho bảng
+let html = `
+    <table>
+        <thead>
+            <tr>
+                ${visibleHeaders.map(header => `
+                    <th class="sortable" data-column="${header}">
+                        ${header}
+                        <span class="sort-icon ${
+                            currentSortColumn === header ? currentSortDirection : ''
+                        }"></span>
+                    </th>
+                `).join('')}
+                <th>Số lượng thực tế</th>
+            </tr>
+        </thead>
+        <tbody>
+`;
 
-        // Thêm dữ liệu vào bảng
-        tableData.forEach((item, index) => {
-            html += `
-                <tr data-id="${item.id}">
-                    <td>${index + 1}</td>
-                    ${visibleHeaders.map(header => `
-                        <td>${item[header] || ''}</td>
-                    `).join('')}
-                    <td>
-    <input type="number" 
-           class="quantity-input" 
-           value="${item.actualQuantity !== undefined && item.actualQuantity !== null ? item.actualQuantity : 0}"
-           min="0"
-           step="1"
-           onfocus="if(this.value === '0') this.value = '';"
-           onblur="if(this.value === '') this.value = 0;"
-           onchange="updateQuantity('${item.id}', this.value)">
-</td>
+// Thêm dữ liệu vào bảng
+tableData.forEach((item, index) => {
+    html += `
+        <tr data-id="${item.id}">
+            ${visibleHeaders.map(header => `
+                <td>${item[header] || ''}</td>
+            `).join('')}
+            <td>
+                <input type="text" 
+                       class="quantity-input" 
+                       value="${item.actualQuantity !== undefined && item.actualQuantity !== null ? item.actualQuantity : 0}"
+                       placeholder="0"
+                       onfocus="if(this.value === '0') this.value = '';"
+                       onblur="handleQuantityBlur(this, '${item.id}')"
+                       onkeypress="return handleQuantityKeypress(event)">
+            </td>
+        </tr>
+    `;
+});
 
-                </tr>
-            `;
-        });
 
         html += '</tbody></table>';
         tableContainer.innerHTML = html;
@@ -593,6 +591,33 @@ function renderTableWithVisibility() {
     }
 }
 
+// Hàm xử lý khi nhấn phím trong input
+function handleQuantityKeypress(event) {
+    // Cho phép: số, dấu cách, +, -, *, /, ., (, )
+    const allowedChars = /[\d\s\+\-\*\/\.\(\)]/;
+    const key = event.key;
+    
+    // Cho phép các phím điều khiển (Enter, Backspace, Delete, Arrow keys, Tab)
+    if (event.keyCode === 13) { // Enter
+        event.target.blur(); // Trigger blur để tính toán
+        return false;
+    }
+    
+    if (event.keyCode === 8 || event.keyCode === 46 || event.keyCode === 9 || 
+        (event.keyCode >= 37 && event.keyCode <= 40)) {
+        return true;
+    }
+    
+    // Kiểm tra ký tự được phép
+    if (!allowedChars.test(key)) {
+        event.preventDefault();
+        return false;
+    }
+    
+    return true;
+}
+
+
 // Hàm mới: Cập nhật thống kê dữ liệu
 function updateDataStats() {
     const dataStats = document.getElementById('dataStats');
@@ -604,6 +629,74 @@ function updateDataStats() {
             dataStats.classList.remove('hide');
         } else {
             dataStats.classList.add('hide');
+        }
+    }
+}
+
+// Hàm tính toán biểu thức số học
+function evaluateExpression(expression) {
+    try {
+        // Loại bỏ khoảng trắng
+        expression = expression.trim();
+        
+        // Nếu là số thuần túy thì trả về luôn
+        if (/^\d+(\.\d+)?$/.test(expression)) {
+            return parseFloat(expression);
+        }
+        
+        // Kiểm tra biểu thức chỉ chứa số và các phép toán cho phép
+        if (!/^[\d\s\+\-\*\/\.\(\)]+$/.test(expression)) {
+            return null;
+        }
+        
+        // Tính toán biểu thức (sử dụng Function constructor an toàn hơn eval)
+        const result = Function('"use strict"; return (' + expression + ')')();
+        
+        // Kiểm tra kết quả hợp lệ
+        if (isNaN(result) || !isFinite(result)) {
+            return null;
+        }
+        
+        // Làm tròn đến 2 chữ số thập phân
+        return Math.round(result * 100) / 100;
+        
+    } catch (error) {
+        console.log('Invalid expression:', expression);
+        return null;
+    }
+}
+
+// Hàm xử lý khi input mất focus
+function handleQuantityBlur(input, itemId) {
+    const value = input.value.trim();
+    
+    // Nếu trống, gán về 0
+    if (value === '') {
+        input.value = 0;
+        updateQuantity(itemId, 0);
+        return;
+    }
+    
+    // Thử tính toán biểu thức
+    const calculatedValue = evaluateExpression(value);
+    
+    if (calculatedValue !== null) {
+        // Nếu tính toán thành công
+        const finalValue = Math.max(0, calculatedValue); // Không cho phép số âm
+        input.value = finalValue;
+        updateQuantity(itemId, finalValue);
+    } else {
+        // Nếu biểu thức không hợp lệ, thử parse số
+        const numValue = parseFloat(value);
+        if (!isNaN(numValue)) {
+            const finalValue = Math.max(0, numValue);
+            input.value = finalValue;
+            updateQuantity(itemId, finalValue);
+        } else {
+            // Không hợp lệ, reset về 0
+            input.value = 0;
+            updateQuantity(itemId, 0);
+            showMessage('Biểu thức không hợp lệ, đã reset về 0', 'warning');
         }
     }
 }
@@ -1588,39 +1681,39 @@ async function exportToExcel() {
         );
 
         // Tạo dữ liệu cho file Excel
-        const excelData = tableData.map((item, index) => {
-            const row = {
-                'STT': index + 1
-            };
+        // Tạo dữ liệu cho file Excel
+const excelData = tableData.map((item, index) => {
+    const row = {};
 
-            // Thêm dữ liệu cho các cột đang hiển thị
-            visibleHeaders.forEach(header => {
-                row[header] = item[header] || '';
-            });
+    // Thêm dữ liệu cho các cột đang hiển thị
+    visibleHeaders.forEach(header => {
+        row[header] = item[header] || '';
+    });
 
-            // Thêm số lượng thực tế - đảm bảo luôn hiển thị 0 nếu không có giá trị
-            const actualQuantity = item.actualQuantity !== undefined && item.actualQuantity !== null 
-                ? item.actualQuantity 
-                : 0;
-            row['Số lượng thực tế'] = actualQuantity;
+    // Thêm số lượng thực tế - đảm bảo luôn hiển thị 0 nếu không có giá trị
+    const actualQuantity = item.actualQuantity !== undefined && item.actualQuantity !== null 
+        ? item.actualQuantity 
+        : 0;
+    row['Số lượng thực tế'] = actualQuantity;
 
-            return row;
-        });
+    return row;
+});
 
-        // Tạo workbook mới
-        const wb = XLSX.utils.book_new();
-        
-        // Tạo worksheet từ dữ liệu
-        const ws = XLSX.utils.json_to_sheet(excelData, {
-            header: ['STT', ...visibleHeaders, 'Số lượng thực tế']
-        });
+// Tạo workbook mới
+const wb = XLSX.utils.book_new();
 
-        // Điều chỉnh độ rộng cột
-        const columnWidths = {};
-        ['STT', ...visibleHeaders, 'Số lượng thực tế'].forEach(header => {
-            columnWidths[header] = { wch: Math.max(header.length, 10) };
-        });
-        ws['!cols'] = Object.values(columnWidths);
+// Tạo worksheet từ dữ liệu
+const ws = XLSX.utils.json_to_sheet(excelData, {
+    header: [...visibleHeaders, 'Số lượng thực tế']
+});
+
+// Điều chỉnh độ rộng cột
+const columnWidths = {};
+[...visibleHeaders, 'Số lượng thực tế'].forEach(header => {
+    columnWidths[header] = { wch: Math.max(header.length, 10) };
+});
+ws['!cols'] = Object.values(columnWidths);
+
 
         // Thêm style cho header
         const range = XLSX.utils.decode_range(ws['!ref']);
@@ -1636,7 +1729,7 @@ async function exportToExcel() {
         }
 
         // Format số cho cột "Số lượng thực tế"
-        const actualQtyColIndex = visibleHeaders.length + 1; // STT + visibleHeaders + Số lượng thực tế
+        const actualQtyColIndex = visibleHeaders.length; // STT + visibleHeaders + Số lượng thực tế
         for (let R = 1; R <= tableData.length; R++) {
             const cellAddress = XLSX.utils.encode_cell({ r: R, c: actualQtyColIndex });
             if (ws[cellAddress]) {
