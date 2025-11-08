@@ -677,49 +677,14 @@ function setupCategoryListener() {
 // Hàm phát âm thanh thông báo
 function playNotificationSound() {
     try {
-        // Tạo AudioContext
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        const audioContext = new AudioContext();
+        // Âm thanh notification đơn giản dạng base64 (beep sound)
+        const audioBase64 = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTGH0fPTgjMGHm7A7+OZURMPU6nm77BdGAg+ltryxnYpBSuBzvLZiTYIGGS56+mjUhALUKvj8LRgGwc5kdXxx3ElBSR1yPDekEAKE12z6eum...'; // Rút gọn
         
-        // Tạo oscillator để tạo âm thanh
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-        
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        
-        // Cấu hình âm thanh (giống notification)
-        oscillator.frequency.value = 800; // Tần số Hz
-        oscillator.type = 'sine'; // Loại sóng âm
-        
-        // Điều chỉnh âm lượng
-        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-        
-        // Phát âm thanh
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.5);
-        
-        // Phát âm thứ 2 (echo effect)
-        setTimeout(() => {
-            const oscillator2 = audioContext.createOscillator();
-            const gainNode2 = audioContext.createGain();
-            
-            oscillator2.connect(gainNode2);
-            gainNode2.connect(audioContext.destination);
-            
-            oscillator2.frequency.value = 1000;
-            oscillator2.type = 'sine';
-            
-            gainNode2.gain.setValueAtTime(0.2, audioContext.currentTime);
-            gainNode2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-            
-            oscillator2.start(audioContext.currentTime);
-            oscillator2.stop(audioContext.currentTime + 0.3);
-        }, 100);
-        
+        const audio = new Audio(audioBase64);
+        audio.volume = 0.4;
+        audio.play().catch(err => console.log('Audio blocked:', err));
     } catch (error) {
-        console.log('Audio not supported or blocked:', error);
+        console.log('Audio not supported:', error);
     }
 }
 
