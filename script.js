@@ -81,6 +81,44 @@ async function loadCategories() {
     }
 }
 
+async function registerServiceWorker() {
+    try {
+        if ('serviceWorker' in navigator) {
+            const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
+                scope: '/'
+            });
+            console.log('Service Worker registered successfully:', registration);
+            return registration;
+        } else {
+            console.log('Service Worker not supported');
+            return null;
+        }
+    } catch (error) {
+        console.error('Service Worker registration failed:', error);
+        return null;
+    }
+}
+
+// Kiểm tra hỗ trợ notification
+function checkNotificationSupport() {
+    if (!('Notification' in window)) {
+        console.log('This browser does not support notifications');
+        return false;
+    }
+    
+    if (!('serviceWorker' in navigator)) {
+        console.log('Service Worker not supported');
+        return false;
+    }
+    
+    if (!('PushManager' in window)) {
+        console.log('Push notifications not supported');
+        return false;
+    }
+    
+    return true;
+}
+
 function formatTimestamp(timestamp) {
     if (!timestamp) return 'Chưa có dữ liệu';
     
@@ -2983,74 +3021,188 @@ let messaging = null;
 let fcmToken = null;
 let notificationPermission = false;
 
-// Khởi tạo Firebase Messaging
-function initializeMessaging() {
+// Khởi tạo Firebase Messaging với error handling tốt hơn
+async function initializeMessaging() {
     try {
+        // Kiểm tra hỗ trợ
+        if (!checkNotificationSupport()) {
+            console.log('Notification not supported on this device');
+            return false;
+        }
+        
+        // Đăng ký Service Worker trước
+        const registration = await registerServiceWorker();
+        
+        if (!registration) {
+            console.log('Could not register Service Worker');
+            return false;
+        }
+        
+        // Đợi Service Worker active
+        await navigator.serviceWorker.ready;
+        
+        // Khởi tạo messaging
         if (firebase.messaging.isSupported()) {
             messaging = firebase.messaging();
-            console.log('Firebase Messaging initialized');
+            
+            // Sử dụng service worker registration
+            messaging.useServiceWorker(registration);
+            
+            console.log('Firebase Messaging initialized successfully');
+            return true;
         } else {
             console.log('Firebase Messaging not supported');
+            return false;
         }
     } catch (error) {
         console.error('Error initializing messaging:', error);
-    }
-}
-
-// Yêu cầu quyền thông báo
-async function requestNotificationPermission() {
-    try {
-        if (!messaging) {
-            console.log('Messaging not supported');
-            return false;
-        }
-
-        const permission = await Notification.requestPermission();
-        
-        if (permission === 'granted') {
-            console.log('Notification permission granted');
-            
-            // Lấy FCM token
-            const token = await messaging.getToken({
-                vapidKey: 'BH0-XWU5fu8M8mDDLCfyvSsNPb-2ZE6bcR52QWX33M5e84UM8OHSbtVKs89Nq2T5ap_KewyT9zmdSU3ZDX6xKXg' // Bạn cần thêm VAPID key từ Firebase Console
-            });
-            
-            if (token) {
-                console.log('FCM Token:', token);
-                fcmToken = token;
-                
-                // Lưu token vào Firestore theo user role
-                await saveNotificationToken(token);
-                
-                return true;
-            }
-        } else {
-            console.log('Notification permission denied');
-            return false;
-        }
-    } catch (error) {
-        console.error('Error requesting notification permission:', error);
         return false;
     }
 }
 
-// Lưu notification token vào Firestore
-async function saveNotificationToken(token) {
+// Yêu cầu quyền thông báo với xử lý mobile tốt hơn
+async function requestNotificationPermission() {
     try {
-        const userRef = db.collection('notification_tokens').doc(currentRole || 'inventory');
+        // Kiểm tra hỗ trợ
+        if (!checkNotificationSupport()) {
+            await Dialog.error(
+                'Trình duyệt của bạn không hỗ trợ thông báo đẩy. Vui lòng sử dụng Chrome hoặc Firefox.',
+                'Không hỗ trợ'
+            );
+            return false;
+        }
         
-        await userRef.set({
-            token: token,
-            role: currentRole,
-            enabled: true,
-            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
+        // Kiểm tra HTTPS (required for mobile)
+        if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+            await Dialog.error(
+                'Thông báo đẩy yêu cầu kết nối HTTPS. Vui lòng truy cập qua HTTPS.',
+                'Yêu cầu HTTPS'
+            );
+            return false;
+        }
         
-        console.log('Notification token saved');
+        // Kiểm tra messaging đã được khởi tạo
+        if (!messaging) {
+            const initialized = await initializeMessaging();
+            if (!initialized) {
+                await Dialog.error(
+                    'Không thể khởi tạo hệ thống thông báo.',
+                    'Lỗi khởi tạo'
+                );
+                return false;
+            }
+        }
+        
+        // Yêu cầu quyền
+        console.log('Requesting notification permission...');
+        const permission = await Notification.requestPermission();
+        
+        console.log('Permission result:', permission);
+        
+        if (permission === 'granted') {
+            console.log('Notification permission granted');
+            
+            try {
+                // Lấy FCM token
+                const token = await messaging.getToken({
+                    vapidKey: 'BH0-XWU5fu8M8mDDLCfyvSsNPb-2ZE6bcR52QWX33M5e84UM8OHSbtVKs89Nq2T5ap_KewyT9zmdSU3ZDX6xKXg', // Thay bằng VAPID key thực tế
+                    serviceWorkerRegistration: await navigator.serviceWorker.ready
+                });
+                
+                if (token) {
+                    console.log('FCM Token obtained:', token);
+                    fcmToken = token;
+                    
+                    // Lưu token vào Firestore
+                    await saveNotificationToken(token);
+                    
+                    return true;
+                } else {
+                    console.error('No token received');
+                    await Dialog.error(
+                        'Không thể lấy token thông báo. Vui lòng thử lại.',
+                        'Lỗi token'
+                    );
+                    return false;
+                }
+            } catch (tokenError) {
+                console.error('Error getting token:', tokenError);
+                
+                // Xử lý lỗi cụ thể
+                let errorMessage = 'Không thể lấy token thông báo.';
+                
+                if (tokenError.code === 'messaging/permission-blocked') {
+                    errorMessage = 'Quyền thông báo đã bị chặn. Vui lòng bật lại trong cài đặt trình duyệt.';
+                } else if (tokenError.code === 'messaging/unsupported-browser') {
+                    errorMessage = 'Trình duyệt không hỗ trợ thông báo đẩy.';
+                } else if (tokenError.code === 'messaging/failed-service-worker-registration') {
+                    errorMessage = 'Lỗi đăng ký Service Worker. Vui lòng tải lại trang.';
+                }
+                
+                await Dialog.error(errorMessage, 'Lỗi');
+                return false;
+            }
+        } else if (permission === 'denied') {
+            console.log('Notification permission denied');
+            await Dialog.alert(
+                'Bạn đã từ chối quyền thông báo. Để bật lại, vui lòng:\n\n' +
+                '1. Vào cài đặt trình duyệt\n' +
+                '2. Tìm mục Thông báo/Notifications\n' +
+                '3. Cho phép thông báo cho trang này',
+                'Quyền bị từ chối'
+            );
+            return false;
+        } else {
+            console.log('Notification permission default');
+            return false;
+        }
     } catch (error) {
-        console.error('Error saving notification token:', error);
+        console.error('Error requesting notification permission:', error);
+        await Dialog.error(
+            'Lỗi khi yêu cầu quyền thông báo: ' + error.message,
+            'Lỗi'
+        );
+        return false;
     }
 }
+
+// Lưu notification token vào Firestore với device info
+async function saveNotificationToken(token) {
+    try {
+        // Tạo unique ID cho device
+        let deviceId = localStorage.getItem('deviceId');
+        if (!deviceId) {
+            deviceId = 'device_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            localStorage.setItem('deviceId', deviceId);
+        }
+        
+        // Lấy thông tin device
+        const deviceInfo = {
+            userAgent: navigator.userAgent,
+            platform: navigator.platform,
+            isMobile: /Mobile|Android|iPhone|iPad/i.test(navigator.userAgent),
+            screen: `${screen.width}x${screen.height}`
+        };
+        
+        const tokenRef = db.collection('notification_tokens').doc(deviceId);
+        
+        await tokenRef.set({
+            token: token,
+            role: currentRole || 'inventory',
+            enabled: true,
+            deviceInfo: deviceInfo,
+            lastUpdated: firebase.firestore.FieldValue.serverTimestamp(),
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        
+        console.log('Notification token saved successfully');
+        return true;
+    } catch (error) {
+        console.error('Error saving notification token:', error);
+        return false;
+    }
+}
+
 
 // Xóa notification token
 async function removeNotificationToken() {
@@ -3070,22 +3222,24 @@ async function removeNotificationToken() {
     }
 }
 
-// Hiển thị banner yêu cầu quyền thông báo
+// Hiển thị banner với hướng dẫn chi tiết
 function showNotificationPermissionBanner() {
-    // Kiểm tra xem đã hỏi quyền chưa
     const hasAsked = localStorage.getItem('notificationAsked');
     if (hasAsked === 'true') return;
+    
+    const isMobile = /Mobile|Android|iPhone|iPad/i.test(navigator.userAgent);
     
     const banner = document.createElement('div');
     banner.className = 'notification-banner';
     banner.innerHTML = `
         <div class="notification-banner-content">
-            <h4><i class="fas fa-bell"></i> Nhận thông báo</h4>
+            <h4><i class="fas fa-bell"></i> Nhận thông báo ${isMobile ? '📱' : '💻'}</h4>
             <p>Bật thông báo để được cập nhật khi có dữ liệu mới</p>
+            ${isMobile ? '<small style="opacity: 0.8;">⚠️ Lưu ý: Cần bật thông báo trong cài đặt trình duyệt</small>' : ''}
         </div>
         <div class="notification-banner-buttons">
             <button onclick="enableNotifications()" class="btn btn-primary">
-                <i class="fas fa-check"></i> Bật
+                <i class="fas fa-check"></i> Bật ngay
             </button>
             <button onclick="dismissNotificationBanner()" class="btn cancel-btn">
                 <i class="fas fa-times"></i> Để sau
@@ -3095,15 +3249,86 @@ function showNotificationPermissionBanner() {
     
     document.body.appendChild(banner);
     
-    // Tự động ẩn sau 10 giây
     setTimeout(() => {
         if (banner.parentNode) {
             banner.remove();
         }
-    }, 10000);
+    }, 15000); // Tăng thời gian hiển thị cho mobile
 }
 
-// Bật thông báo
+// Hiển thị hướng dẫn bật thông báo trên mobile
+function showMobileNotificationGuide() {
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    
+    let instructions = '';
+    
+    if (isAndroid) {
+        instructions = `
+            <ol>
+                <li>Nhấn vào biểu tượng <strong>⋮</strong> (3 chấm) trên Chrome</li>
+                <li>Chọn <strong>Cài đặt</strong></li>
+                <li>Chọn <strong>Cài đặt trang web</strong></li>
+                <li>Chọn trang web này</li>
+                <li>Bật <strong>Thông báo</strong></li>
+            </ol>
+        `;
+    } else if (isIOS) {
+        instructions = `
+            <div class="ios-warning">
+                <p>⚠️ <strong>Lưu ý:</strong> Safari trên iOS không hỗ trợ Push Notification cho web app.</p>
+                <p>Vui lòng sử dụng:</p>
+                <ul>
+                    <li>Chrome trên Android</li>
+                    <li>Chrome/Firefox/Edge trên máy tính</li>
+                </ul>
+            </div>
+        `;
+    } else {
+        instructions = `
+            <ol>
+                <li>Nhấn vào biểu tượng <strong>🔒</strong> bên cạnh URL</li>
+                <li>Chọn <strong>Cài đặt trang web</strong></li>
+                <li>Tìm mục <strong>Thông báo</strong></li>
+                <li>Chọn <strong>Cho phép</strong></li>
+            </ol>
+        `;
+    }
+    
+    const guide = document.createElement('div');
+    guide.className = 'mobile-notification-guide';
+    guide.innerHTML = `
+        <h3>
+            <i class="fas fa-mobile-alt"></i>
+            Hướng dẫn bật thông báo
+        </h3>
+        ${instructions}
+        <div class="guide-buttons">
+            <button onclick="tryEnableNotificationAgain()" class="btn btn-primary">
+                <i class="fas fa-redo"></i> Thử lại
+            </button>
+            <button onclick="closeMobileGuide()" class="btn cancel-btn">
+                <i class="fas fa-times"></i> Đóng
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(guide);
+}
+
+// Đóng hướng dẫn
+function closeMobileGuide() {
+    const guide = document.querySelector('.mobile-notification-guide');
+    if (guide) guide.remove();
+}
+
+// Thử bật lại notification
+async function tryEnableNotificationAgain() {
+    closeMobileGuide();
+    await enableNotifications();
+}
+
+// Bật thông báo với xử lý lỗi tốt hơn
 async function enableNotifications() {
     const banner = document.querySelector('.notification-banner');
     if (banner) banner.remove();
@@ -3119,11 +3344,24 @@ async function enableNotifications() {
         updateNotificationToggle(true);
         localStorage.setItem('notificationAsked', 'true');
         localStorage.setItem('notificationEnabled', 'true');
-        showMessage('Đã bật thông báo thành công!', 'success');
+        await Dialog.success(
+            'Đã bật thông báo thành công! Bạn sẽ nhận được thông báo khi có dữ liệu mới.',
+            'Thành công'
+        );
     } else {
-        showMessage('Không thể bật thông báo. Vui lòng cho phép trong cài đặt trình duyệt.', 'error');
+        // Hiển thị hướng dẫn nếu thất bại
+        const isMobile = /Mobile|Android|iPhone|iPad/i.test(navigator.userAgent);
+        if (isMobile) {
+            showMobileNotificationGuide();
+        } else {
+            await Dialog.error(
+                'Không thể bật thông báo. Vui lòng kiểm tra cài đặt trình duyệt.',
+                'Lỗi'
+            );
+        }
     }
 }
+
 
 // Tắt thông báo
 function dismissNotificationBanner() {
