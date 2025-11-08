@@ -2284,6 +2284,15 @@ async function loadExcel() {
 
                 await batch.commit();
 
+                const shouldNotify = await Dialog.confirm(
+            'Bạn có muốn gửi thông báo cho những người đã bật nhận thông báo?',
+            'Gửi thông báo'
+            );
+
+if (shouldNotify) {
+    await sendNotificationToUsers(currentCategory.name, jsonData.length);
+}
+
 // Reset file selection sau khi upload thành công
 clearFileSelection();
 
@@ -2668,6 +2677,28 @@ async function initializeApp() {
         }
          setupCategoryListener();
 
+         // Khởi tạo messaging
+        initializeMessaging();
+        
+        // Setup foreground messaging
+        setupForegroundMessaging();
+        
+        // Thiết lập listener cho category changes
+        setupCategoryListener();
+        
+        // Thiết lập event listener cho notification toggle
+        const notificationCheckbox = document.getElementById('notificationCheckbox');
+        if (notificationCheckbox) {
+            notificationCheckbox.addEventListener('change', handleNotificationToggle);
+            
+            // Kiểm tra trạng thái đã lưu
+            const savedState = localStorage.getItem('notificationEnabled');
+            if (savedState === 'true') {
+                notificationCheckbox.checked = true;
+                notificationPermission = true;
+            }
+        }
+
     } catch (error) {
         console.error('Error initializing app:', error);
         showMessage('Lỗi khởi tạo ứng dụng', 'error');
@@ -2896,7 +2927,7 @@ function selectRole(role) {
         } catch (e) {
             console.log('Audio context activation failed:', e);
         }
-        
+
         if (role === 'admin') {
             // Yêu cầu xác thực mật khẩu cho admin
             showAdminPasswordModal();
@@ -2932,10 +2963,286 @@ function selectRole(role) {
         // Tải danh sách danh mục
         loadCategories();
 
+        if (role === 'inventory') {
+            setTimeout(() => {
+                const notificationEnabled = localStorage.getItem('notificationEnabled');
+                if (notificationEnabled !== 'true') {
+                    showNotificationPermissionBanner();
+                }
+            }, 2000);
+        }
+
     } catch (error) {
         console.error('Error selecting role:', error);
         showMessage('Lỗi khi chọn vai trò', 'error');
     }
 }
 
+// Thêm vào phần biến toàn cục
+let messaging = null;
+let fcmToken = null;
+let notificationPermission = false;
 
+// Khởi tạo Firebase Messaging
+function initializeMessaging() {
+    try {
+        if (firebase.messaging.isSupported()) {
+            messaging = firebase.messaging();
+            console.log('Firebase Messaging initialized');
+        } else {
+            console.log('Firebase Messaging not supported');
+        }
+    } catch (error) {
+        console.error('Error initializing messaging:', error);
+    }
+}
+
+// Yêu cầu quyền thông báo
+async function requestNotificationPermission() {
+    try {
+        if (!messaging) {
+            console.log('Messaging not supported');
+            return false;
+        }
+
+        const permission = await Notification.requestPermission();
+        
+        if (permission === 'granted') {
+            console.log('Notification permission granted');
+            
+            // Lấy FCM token
+            const token = await messaging.getToken({
+                vapidKey: 'BH0-XWU5fu8M8mDDLCfyvSsNPb-2ZE6bcR52QWX33M5e84UM8OHSbtVKs89Nq2T5ap_KewyT9zmdSU3ZDX6xKXg' // Bạn cần thêm VAPID key từ Firebase Console
+            });
+            
+            if (token) {
+                console.log('FCM Token:', token);
+                fcmToken = token;
+                
+                // Lưu token vào Firestore theo user role
+                await saveNotificationToken(token);
+                
+                return true;
+            }
+        } else {
+            console.log('Notification permission denied');
+            return false;
+        }
+    } catch (error) {
+        console.error('Error requesting notification permission:', error);
+        return false;
+    }
+}
+
+// Lưu notification token vào Firestore
+async function saveNotificationToken(token) {
+    try {
+        const userRef = db.collection('notification_tokens').doc(currentRole || 'inventory');
+        
+        await userRef.set({
+            token: token,
+            role: currentRole,
+            enabled: true,
+            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        
+        console.log('Notification token saved');
+    } catch (error) {
+        console.error('Error saving notification token:', error);
+    }
+}
+
+// Xóa notification token
+async function removeNotificationToken() {
+    try {
+        if (!fcmToken) return;
+        
+        const userRef = db.collection('notification_tokens').doc(currentRole || 'inventory');
+        
+        await userRef.update({
+            enabled: false,
+            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        console.log('Notification token disabled');
+    } catch (error) {
+        console.error('Error removing notification token:', error);
+    }
+}
+
+// Hiển thị banner yêu cầu quyền thông báo
+function showNotificationPermissionBanner() {
+    // Kiểm tra xem đã hỏi quyền chưa
+    const hasAsked = localStorage.getItem('notificationAsked');
+    if (hasAsked === 'true') return;
+    
+    const banner = document.createElement('div');
+    banner.className = 'notification-banner';
+    banner.innerHTML = `
+        <div class="notification-banner-content">
+            <h4><i class="fas fa-bell"></i> Nhận thông báo</h4>
+            <p>Bật thông báo để được cập nhật khi có dữ liệu mới</p>
+        </div>
+        <div class="notification-banner-buttons">
+            <button onclick="enableNotifications()" class="btn btn-primary">
+                <i class="fas fa-check"></i> Bật
+            </button>
+            <button onclick="dismissNotificationBanner()" class="btn cancel-btn">
+                <i class="fas fa-times"></i> Để sau
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(banner);
+    
+    // Tự động ẩn sau 10 giây
+    setTimeout(() => {
+        if (banner.parentNode) {
+            banner.remove();
+        }
+    }, 10000);
+}
+
+// Bật thông báo
+async function enableNotifications() {
+    const banner = document.querySelector('.notification-banner');
+    if (banner) banner.remove();
+    
+    showLoading('Đang yêu cầu quyền thông báo...');
+    
+    const granted = await requestNotificationPermission();
+    
+    hideLoading();
+    
+    if (granted) {
+        notificationPermission = true;
+        updateNotificationToggle(true);
+        localStorage.setItem('notificationAsked', 'true');
+        localStorage.setItem('notificationEnabled', 'true');
+        showMessage('Đã bật thông báo thành công!', 'success');
+    } else {
+        showMessage('Không thể bật thông báo. Vui lòng cho phép trong cài đặt trình duyệt.', 'error');
+    }
+}
+
+// Tắt thông báo
+function dismissNotificationBanner() {
+    const banner = document.querySelector('.notification-banner');
+    if (banner) banner.remove();
+    localStorage.setItem('notificationAsked', 'true');
+}
+
+// Cập nhật UI toggle
+function updateNotificationToggle(enabled) {
+    const checkbox = document.getElementById('notificationCheckbox');
+    if (checkbox) {
+        checkbox.checked = enabled;
+    }
+}
+
+// Xử lý toggle notification
+async function handleNotificationToggle(event) {
+    const enabled = event.target.checked;
+    
+    if (enabled) {
+        showLoading('Đang bật thông báo...');
+        const granted = await requestNotificationPermission();
+        hideLoading();
+        
+        if (!granted) {
+            event.target.checked = false;
+            showMessage('Không thể bật thông báo', 'error');
+        } else {
+            notificationPermission = true;
+            localStorage.setItem('notificationEnabled', 'true');
+            showMessage('Đã bật thông báo', 'success');
+        }
+    } else {
+        await removeNotificationToken();
+        notificationPermission = false;
+        localStorage.setItem('notificationEnabled', 'false');
+        showMessage('Đã tắt thông báo', 'info');
+    }
+}
+
+// Lắng nghe foreground messages
+function setupForegroundMessaging() {
+    if (!messaging) return;
+    
+    messaging.onMessage((payload) => {
+        console.log('Received foreground message:', payload);
+        
+        const { title, body } = payload.notification;
+        
+        // Hiển thị notification nội bộ
+        showSaveNotification(title, body);
+        
+        // Phát âm thanh
+        playNotificationSound();
+        
+        // Hiển thị browser notification nếu tab không active
+        if (document.hidden) {
+            new Notification(title, {
+                body: body,
+                icon: '/favicon.ico',
+                badge: '/favicon.ico',
+                vibrate: [200, 100, 200]
+            });
+        }
+    });
+}
+
+// Gửi notification đến các user
+async function sendNotificationToUsers(categoryName, itemCount) {
+    try {
+        showLoading('Đang gửi thông báo...');
+        
+        // Lấy danh sách tokens đã bật notification
+        const tokensSnapshot = await db.collection('notification_tokens')
+            .where('enabled', '==', true)
+            .get();
+        
+        if (tokensSnapshot.empty) {
+            hideLoading();
+            showMessage('Không có người dùng nào đã bật nhận thông báo', 'info');
+            return;
+        }
+        
+        const tokens = [];
+        tokensSnapshot.forEach(doc => {
+            tokens.push(doc.data().token);
+        });
+        
+        // Gọi Cloud Function để gửi notification
+        // (Bạn cần tạo Cloud Function - xem bước 8)
+        const response = await fetch('YOUR_CLOUD_FUNCTION_URL', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                tokens: tokens,
+                title: `📋 ${categoryName}`,
+                body: `Đã có ${itemCount} dòng dữ liệu mới được tải lên. Vui lòng bắt đầu kiểm kê!`,
+                data: {
+                    categoryName: categoryName,
+                    itemCount: itemCount,
+                    timestamp: Date.now()
+                }
+            })
+        });
+        
+        hideLoading();
+        
+        if (response.ok) {
+            showMessage(`Đã gửi thông báo đến ${tokens.length} người dùng`, 'success');
+        } else {
+            showMessage('Lỗi khi gửi thông báo', 'error');
+        }
+        
+    } catch (error) {
+        hideLoading();
+        console.error('Error sending notifications:', error);
+        showMessage('Lỗi khi gửi thông báo', 'error');
+    }
+}

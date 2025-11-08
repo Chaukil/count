@@ -16,6 +16,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-messaging.js"></script>
 
     <!-- Excel Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.16.9/xlsx.full.min.js"></script>
@@ -41,25 +42,36 @@
     <div id="categoryScreen" class="screen hide">
         <div class="container">
             <!-- Header -->
-            <div class="header">
-                <div class="user-profile">
-                    <div class="user-info" id="userInfoBtn">
-                        <div class="avatar">
-                            <i class="fas fa-user"></i>
-                        </div>
-                        <span class="user-role"></span>
-                        <i class="fas fa-chevron-down"></i>
-                    </div>
-
-                    <div class="user-menu" id="userMenu">
-                        <div class="menu-item" onclick="backToRoleSelection()">
-                            <i class="fas fa-sign-out-alt"></i>
-                            <span>Quay lại</span>
-                        </div>
-                    </div>
-                </div>
-                <h2>DANH MỤC KIỂM KÊ</h2>
+            <!-- Trong phần header của categoryScreen và mainScreen -->
+<div class="header">
+    <div class="user-profile">
+        <div class="user-info" id="userInfoBtn">
+            <div class="avatar">
+                <i class="fas fa-user"></i>
             </div>
+            <span class="user-role"></span>
+            <i class="fas fa-chevron-down"></i>
+        </div>
+
+        <div class="user-menu" id="userMenu">
+            <!-- Thêm toggle notification -->
+            <div class="menu-item notification-toggle" id="notificationToggle">
+                <i class="fas fa-bell"></i>
+                <span>Nhận thông báo</span>
+                <label class="switch">
+                    <input type="checkbox" id="notificationCheckbox">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="menu-item" onclick="backToRoleSelection()">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Quay lại</span>
+            </div>
+        </div>
+    </div>
+    <h2>DANH MỤC KIỂM KÊ</h2>
+</div>
+
             <!-- Danh sách danh mục -->
             <div class="category-buttons" id="categoryButtons">
                 <!-- Danh mục sẽ được tải vào đây -->
