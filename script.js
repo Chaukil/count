@@ -660,7 +660,7 @@ function setupCategoryListener() {
                         
                         lastNotificationTime = notifTime;
                         
-                        // Hiển thị thông báo
+                        // Hiển thị thông báo (bất kể đang ở trang nào)
                         showSaveNotification(
                             notification.categoryName,
                             notification.itemCount
@@ -674,19 +674,60 @@ function setupCategoryListener() {
     });
 }
 
-// Hàm phát âm thanh thông báo
+
+// Hàm phát âm thanh thông báo (Web Audio API - Improved)
 function playNotificationSound() {
     try {
-        // Âm thanh notification đơn giản dạng base64 (beep sound)
-        const audioBase64 = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTGH0fPTgjMGHm7A7+OZURMPU6nm77BdGAg+ltryxnYpBSuBzvLZiTYIGGS56+mjUhALUKvj8LRgGwc5kdXxx3ElBSR1yPDekEAKE12z6eum...'; // Rút gọn
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioContext = new AudioContext();
         
-        const audio = new Audio(audioBase64);
-        audio.volume = 0.4;
-        audio.play().catch(err => console.log('Audio blocked:', err));
+        // Tạo âm thanh đầu tiên (tần số cao)
+        const oscillator1 = audioContext.createOscillator();
+        const gainNode1 = audioContext.createGain();
+        
+        oscillator1.connect(gainNode1);
+        gainNode1.connect(audioContext.destination);
+        
+        oscillator1.frequency.value = 800; // Hz
+        oscillator1.type = 'sine';
+        
+        gainNode1.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode1.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+        
+        oscillator1.start(audioContext.currentTime);
+        oscillator1.stop(audioContext.currentTime + 0.2);
+        
+        // Tạo âm thanh thứ 2 (tần số thấp hơn - sau 0.15s)
+        setTimeout(() => {
+            const oscillator2 = audioContext.createOscillator();
+            const gainNode2 = audioContext.createGain();
+            
+            oscillator2.connect(gainNode2);
+            gainNode2.connect(audioContext.destination);
+            
+            oscillator2.frequency.value = 1000; // Hz
+            oscillator2.type = 'sine';
+            
+            gainNode2.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+            
+            oscillator2.start(audioContext.currentTime);
+            oscillator2.stop(audioContext.currentTime + 0.2);
+        }, 150);
+        
     } catch (error) {
-        console.log('Audio not supported:', error);
+        console.log('Audio not supported or blocked:', error);
+        // Fallback: Thử phát âm bằng cách khác
+        try {
+            const beep = new Audio('data:audio/wav;base64,UklGRhIAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YU4AAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTGH0fPTgjMGHm7A7+OZURMPU6nm77BdGAg+ltryxnYpBSuBzvLZiTYIGGS56+mjUhALUKvj8LRgGwc5kdXxx3ElBSR1yPDekEAKE12z6eum');
+            beep.volume = 0.5;
+            beep.play().catch(() => console.log('Beep fallback failed'));
+        } catch (e) {
+            console.log('All audio methods failed');
+        }
     }
 }
+
 
 // Hàm hiển thị thông báo save từ user khác
 function showSaveNotification(categoryName, itemCount) {
@@ -2845,6 +2886,16 @@ function closeEditModal() {
 function selectRole(role) {
     try {
         console.log('Selecting role:', role);
+        
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            const testContext = new AudioContext();
+            testContext.resume().then(() => {
+                console.log('Audio context activated');
+            });
+        } catch (e) {
+            console.log('Audio context activation failed:', e);
+        }
         
         if (role === 'admin') {
             // Yêu cầu xác thực mật khẩu cho admin

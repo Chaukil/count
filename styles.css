@@ -1978,7 +1978,7 @@ body:not(.role-admin) .option-divider {
     padding: 16px 20px;
     border-radius: 12px;
     box-shadow: 0 4px 20px rgba(76, 175, 80, 0.4);
-    z-index: 9999;
+    z-index: 99999; /* Tăng lên rất cao */
     display: flex;
     align-items: center;
     gap: 15px;
