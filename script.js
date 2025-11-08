@@ -1260,9 +1260,14 @@ async function processPastedData() {
             batch.delete(doc.ref);
         });
 
-        // Cập nhật thời gian cho danh mục
+        // Cập nhật thời gian cho danh mục VÀ THÔNG BÁO
         batch.update(categoriesRef.doc(currentCategory.id), {
-            lastUploadTime: firebase.firestore.FieldValue.serverTimestamp()
+            lastUploadTime: firebase.firestore.FieldValue.serverTimestamp(),
+            lastSaveNotification: {
+                categoryName: currentCategory.name,
+                itemCount: rows.length,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            }
         });
 
         // Thêm dữ liệu mới
@@ -1285,24 +1290,24 @@ async function processPastedData() {
 
         await batch.commit();
 
-// Đóng modal
-closeModal('pasteDataModal');
+        // Đóng modal
+        closeModal('pasteDataModal');
 
-// Tải lại dữ liệu
-await loadCategories();
-await loadInventoryData(currentCategory.id);
+        // Tải lại dữ liệu
+        await loadCategories();
+        await loadInventoryData(currentCategory.id);
 
-// Sắp xếp tự động theo cột đầu tiên
-autoSortData();
-renderTableWithVisibility();
+        // Sắp xếp tự động theo cột đầu tiên
+        autoSortData();
+        renderTableWithVisibility();
 
-hideLoading();
+        hideLoading();
 
-// Hiển thị thông báo thành công
-await Dialog.success(
-    `Đã tải thành công ${rows.length} dòng dữ liệu và sắp xếp A-Z`,
-    'Thành công'
-);
+        // Hiển thị thông báo thành công
+        await Dialog.success(
+            `Đã tải thành công ${rows.length} dòng dữ liệu và sắp xếp A-Z`,
+            'Thành công'
+        );
 
     } catch (error) {
         hideLoading();
@@ -1310,6 +1315,7 @@ await Dialog.success(
         await Dialog.error('Lỗi khi tải dữ liệu lên hệ thống');
     }
 }
+
 
 function cleanPastedData(text) {
     // Normalize line breaks
@@ -2199,7 +2205,6 @@ function checkAllQuantities() {
     });
 }
 
-
 // Xử lý tải file Excel
 async function loadExcel() {
     try {
@@ -2259,7 +2264,12 @@ async function loadExcel() {
 
                 // Cập nhật thời gian cho danh mục
                 batch.update(categoriesRef.doc(currentCategory.id), {
-                    lastUploadTime: firebase.firestore.FieldValue.serverTimestamp()
+                    lastUploadTime: firebase.firestore.FieldValue.serverTimestamp(),
+                    lastSaveNotification: {
+                        categoryName: currentCategory.name,
+                        itemCount: jsonData.length,
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    }
                 });
 
                 // Thêm dữ liệu mới
@@ -2282,24 +2292,21 @@ async function loadExcel() {
 
                 await batch.commit();
 
-                const shouldNotify = await Dialog.confirm(
-            'Bạn có muốn gửi thông báo cho những người đã bật nhận thông báo?',
-            'Gửi thông báo'
-            );
+                // Reset file selection sau khi upload thành công
+                clearFileSelection();
 
-// Reset file selection sau khi upload thành công
-clearFileSelection();
+                // Tải lại dữ liệu
+                await loadCategories();
+                await loadInventoryData(currentCategory.id);
 
-// Tải lại dữ liệu
-await loadCategories();
-await loadInventoryData(currentCategory.id);
+                // Sắp xếp tự động theo cột đầu tiên
+                autoSortData();
+                renderTableWithVisibility();
 
-// Sắp xếp tự động theo cột đầu tiên
-autoSortData();
-renderTableWithVisibility();
-
-hideLoading();
-showMessage(`Đã tải thành công ${jsonData.length} dòng dữ liệu và sắp xếp A-Z`, 'success');
+                hideLoading();
+                
+                // Hiển thị thông báo thành công
+                showMessage(`Đã tải thành công ${jsonData.length} dòng dữ liệu và sắp xếp A-Z`, 'success');
 
             } catch (error) {
                 hideLoading();
@@ -2321,6 +2328,7 @@ showMessage(`Đã tải thành công ${jsonData.length} dòng dữ liệu và s�
         showMessage('Lỗi khi tải file Excel', 'error');
     }
 }
+
 function showLoading(message = 'Đang xử lý...') {
     const loadingHtml = `
         <div class="loading-overlay">
