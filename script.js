@@ -34,7 +34,6 @@ const ADMIN_PASSWORD = "71270";
 // Tải danh sách danh mục từ Firebase
 async function loadCategories() {
     try {
-        console.log('Loading categories...'); // Debug log
 
         const snapshot = await db.collection('categories').get();
         const categoryButtons = document.getElementById('categoryButtons');
@@ -75,8 +74,6 @@ async function loadCategories() {
             `;
             categoryButtons.appendChild(categoryCard);
         });
-
-        console.log('Categories loaded successfully'); // Debug log
 
     } catch (error) {
         console.error('Error loading categories:', error);
@@ -173,7 +170,6 @@ function cancelAdminLogin() {
 
 function proceedWithAdminRole() {
     try {
-        console.log('Proceeding with admin role');
         currentRole = 'admin';
         document.body.classList.add('role-admin'); // Thêm class cho body
         document.body.classList.remove('role-inventory');
@@ -210,7 +206,6 @@ function proceedWithAdminRole() {
 
 async function selectCategory(category) {
     try {
-        console.log('Selecting category:', category);
         currentCategory = category;
 
         // Ẩn màn hình danh mục
@@ -232,7 +227,6 @@ async function selectCategory(category) {
         // Tải dữ liệu kiểm kê
         await loadInventoryData(category.id);
 
-        console.log('Category selection completed');
     } catch (error) {
         console.error('Error selecting category:', error);
         showMessage('Lỗi khi chọn danh mục', 'error');
@@ -241,13 +235,6 @@ async function selectCategory(category) {
 
 async function backToRoleSelection() {
     try {
-        // Hiển thị xác nhận
-        const confirmed = await Dialog.confirm(
-            'Bạn có chắc muốn quay lại màn hình chọn vai trò?',
-            'Xác nhận quay lại'
-        );
-         if (!confirmed) return;
-
         // Reset các biến state
         currentRole = null;
         currentCategory = null;
@@ -257,6 +244,7 @@ async function backToRoleSelection() {
         currentSortColumn = null;
         currentSortDirection = 'asc';
         isAdminAuthenticated = false;
+         cleanupListeners();
 
         // Ẩn màn hình danh mục
         document.getElementById('categoryScreen').classList.add('hide');
@@ -283,10 +271,11 @@ async function backToRoleSelection() {
         });
 
     } catch (error) {
-         console.error('Error returning to role selection:', error);
+        console.error('Error returning to role selection:', error);
         await Dialog.error('Lỗi khi quay lại màn hình chọn vai trò');
     }
 }
+
 
 // Dialog System
 const Dialog = {
@@ -572,18 +561,23 @@ tableData.forEach((item, index) => {
 
 
         html += '</tbody></table>';
-        tableContainer.innerHTML = html;
+tableContainer.innerHTML = html;
 
-        // Thêm event listeners cho sorting
-        document.querySelectorAll('th.sortable').forEach(th => {
-            th.addEventListener('click', () => {
-                const column = th.dataset.column;
-                sortTable(column);
-            });
-        });
+// Thêm event listeners cho sorting
+document.querySelectorAll('th.sortable').forEach(th => {
+    th.addEventListener('click', () => {
+        const column = th.dataset.column;
+        sortTable(column);
+    });
+});
 
-        // Cập nhật stats
-        updateDataStats();
+// Cập nhật stats
+updateDataStats();
+
+// Kiểm tra và tô màu tất cả input
+setTimeout(() => {
+    checkAllQuantities();
+}, 100);
 
     } catch (error) {
         console.error('Error rendering table:', error);
@@ -633,6 +627,86 @@ function updateDataStats() {
     }
 }
 
+// Biến toàn cục để lưu listener
+let categoryListener = null;
+let lastNotificationTime = 0;
+
+// Hàm thiết lập listener cho category
+function setupCategoryListener() {
+    // Hủy listener cũ nếu có
+    if (categoryListener) {
+        categoryListener();
+    }
+
+    // Lắng nghe tất cả categories
+    categoryListener = categoriesRef.onSnapshot((snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+            if (change.type === 'modified') {
+                const categoryData = change.doc.data();
+                
+                // Kiểm tra xem có thông báo lưu mới không
+                if (categoryData.lastSaveNotification) {
+                    const notification = categoryData.lastSaveNotification;
+                    const notifTime = notification.timestamp?.seconds || 0;
+                    
+                    // Chỉ hiển thị thông báo nếu:
+                    // 1. Thông báo mới hơn lần hiển thị trước
+                    // 2. Không phải là category đang mở (để tránh duplicate)
+                    // 3. Thông báo không quá 5 giây
+                    const now = Date.now() / 1000;
+                    if (notifTime > lastNotificationTime && 
+                        (now - notifTime) < 5 &&
+                        (!currentCategory || currentCategory.id !== change.doc.id)) {
+                        
+                        lastNotificationTime = notifTime;
+                        
+                        // Hiển thị thông báo
+                        showSaveNotification(
+                            notification.categoryName,
+                            notification.itemCount
+                        );
+                    }
+                }
+            }
+        });
+    }, (error) => {
+        console.error('Error listening to categories:', error);
+    });
+}
+
+// Hàm hiển thị thông báo save từ user khác
+function showSaveNotification(categoryName, itemCount) {
+    const notificationDiv = document.createElement('div');
+    notificationDiv.className = 'save-notification';
+    notificationDiv.innerHTML = `
+        <div class="notification-icon">
+            <i class="fas fa-save"></i>
+        </div>
+        <div class="notification-content">
+            <strong>${categoryName}</strong>
+            <span>Đã lưu ${itemCount} dòng dữ liệu</span>
+        </div>
+    `;
+
+    document.body.appendChild(notificationDiv);
+
+    // Tự động xóa sau 4 giây
+    setTimeout(() => {
+        notificationDiv.classList.add('fade-out');
+        setTimeout(() => {
+            notificationDiv.remove();
+        }, 300);
+    }, 4000);
+}
+
+// Hàm cleanup khi thoát
+function cleanupListeners() {
+    if (categoryListener) {
+        categoryListener();
+        categoryListener = null;
+    }
+}
+
 // Hàm tính toán biểu thức số học
 function evaluateExpression(expression) {
     try {
@@ -674,6 +748,7 @@ function handleQuantityBlur(input, itemId) {
     if (value === '') {
         input.value = 0;
         updateQuantity(itemId, 0);
+        checkAndHighlightQuantity(input, itemId);
         return;
     }
     
@@ -685,6 +760,7 @@ function handleQuantityBlur(input, itemId) {
         const finalValue = Math.max(0, calculatedValue); // Không cho phép số âm
         input.value = finalValue;
         updateQuantity(itemId, finalValue);
+        checkAndHighlightQuantity(input, itemId);
     } else {
         // Nếu biểu thức không hợp lệ, thử parse số
         const numValue = parseFloat(value);
@@ -692,14 +768,17 @@ function handleQuantityBlur(input, itemId) {
             const finalValue = Math.max(0, numValue);
             input.value = finalValue;
             updateQuantity(itemId, finalValue);
+            checkAndHighlightQuantity(input, itemId);
         } else {
             // Không hợp lệ, reset về 0
             input.value = 0;
             updateQuantity(itemId, 0);
+            checkAndHighlightQuantity(input, itemId);
             showMessage('Biểu thức không hợp lệ, đã reset về 0', 'warning');
         }
     }
 }
+
 
 // Thêm danh mục mới vào Firebase
 async function addCategory() {
@@ -1149,20 +1228,25 @@ async function processPastedData() {
         });
 
         await batch.commit();
-        hideLoading();
 
-        // Đóng modal
-        closeModal('pasteDataModal');
+// Đóng modal
+closeModal('pasteDataModal');
 
-        // Hiển thị thông báo thành công
-        await Dialog.success(
-            `Đã tải thành công ${rows.length} dòng dữ liệu`,
-            'Thành công'
-        );
+// Tải lại dữ liệu
+await loadCategories();
+await loadInventoryData(currentCategory.id);
 
-        // Tải lại dữ liệu
-        await loadCategories();
-        await loadInventoryData(currentCategory.id);
+// Sắp xếp tự động theo cột đầu tiên
+autoSortData();
+renderTableWithVisibility();
+
+hideLoading();
+
+// Hiển thị thông báo thành công
+await Dialog.success(
+    `Đã tải thành công ${rows.length} dòng dữ liệu và sắp xếp A-Z`,
+    'Thành công'
+);
 
     } catch (error) {
         hideLoading();
@@ -1758,6 +1842,40 @@ ws['!cols'] = Object.values(columnWidths);
     }
 }
 
+// Hàm sắp xếp dữ liệu theo cột đầu tiên (A-Z)
+function autoSortData() {
+    if (!tableData || tableData.length === 0 || !currentHeaders || currentHeaders.length === 0) {
+        return;
+    }
+
+    const firstColumn = currentHeaders[0];
+    
+    tableData.sort((a, b) => {
+        let valueA = a[firstColumn];
+        let valueB = b[firstColumn];
+
+        // Xử lý giá trị null/undefined
+        valueA = valueA === null || valueA === undefined ? '' : valueA;
+        valueB = valueB === null || valueB === undefined ? '' : valueB;
+
+        // Chuyển đổi sang số nếu có thể
+        const numA = parseFloat(valueA);
+        const numB = parseFloat(valueB);
+
+        if (!isNaN(numA) && !isNaN(numB)) {
+            return numA - numB; // Sắp xếp số từ nhỏ đến lớn
+        } else {
+            // Sắp xếp chuỗi A-Z (không phân biệt hoa thường)
+            valueA = String(valueA).toLowerCase();
+            valueB = String(valueB).toLowerCase();
+            return valueA.localeCompare(valueB, 'vi');
+        }
+    });
+
+    // Cập nhật trạng thái sắp xếp
+    currentSortColumn = firstColumn;
+    currentSortDirection = 'asc';
+}
 
 // Xóa danh mục
 
@@ -1938,7 +2056,6 @@ async function deleteCategory(categoryId) {
     }
 }
 
-// Tải dữ liệu kiểm kê theo danh mục
 async function loadInventoryData(categoryId) {
     try {
         const snapshot = await inventoryRef
@@ -1963,12 +2080,69 @@ async function loadInventoryData(categoryId) {
         // Lưu headers vào state
         currentHeaders = headers;
 
+        // Sắp xếp tự động theo cột đầu tiên
+        autoSortData();
+
         renderTable(headers);
     } catch (error) {
         console.error('Error loading inventory data:', error);
         showMessage('Lỗi khi tải dữ liệu kiểm kê', 'error');
     }
 }
+
+// Hàm sắp xếp thủ công
+function manualSort() {
+    if (!tableData || tableData.length === 0) {
+        showMessage('Không có dữ liệu để sắp xếp', 'info');
+        return;
+    }
+
+    autoSortData();
+    renderTableWithVisibility();
+    showMessage('Đã sắp xếp dữ liệu theo A-Z', 'success');
+}
+
+// Hàm kiểm tra và tô màu input (có tooltip)
+function checkAndHighlightQuantity(input, itemId) {
+    const item = tableData.find(item => item.id === itemId);
+    if (!item) return;
+
+    const actualQuantity = parseFloat(input.value) || 0;
+    
+    // Lấy cột cuối cùng của dữ liệu (cột trước cột "Số lượng thực tế")
+    if (currentHeaders && currentHeaders.length > 0) {
+        const lastDataColumn = currentHeaders[currentHeaders.length - 1];
+        const expectedQuantity = parseFloat(item[lastDataColumn]) || 0;
+        
+        // So sánh và tô màu
+        if (actualQuantity < expectedQuantity) {
+            input.classList.add('warning');
+            input.classList.remove('normal');
+            input.title = `Thiếu: ${expectedQuantity - actualQuantity} (Yêu cầu: ${expectedQuantity})`;
+        } else if (actualQuantity > expectedQuantity) {
+            input.classList.add('normal');
+            input.classList.remove('warning');
+            input.title = `Dư: ${actualQuantity - expectedQuantity} (Yêu cầu: ${expectedQuantity})`;
+        } else {
+            input.classList.add('normal');
+            input.classList.remove('warning');
+            input.title = `Đủ: ${expectedQuantity}`;
+        }
+    }
+}
+
+// Hàm kiểm tra tất cả các input
+function checkAllQuantities() {
+    const inputs = document.querySelectorAll('.quantity-input');
+    inputs.forEach(input => {
+        const row = input.closest('tr');
+        const itemId = row.dataset.id;
+        if (itemId) {
+            checkAndHighlightQuantity(input, itemId);
+        }
+    });
+}
+
 
 // Xử lý tải file Excel
 async function loadExcel() {
@@ -2051,14 +2225,20 @@ async function loadExcel() {
                 });
 
                 await batch.commit();
-                hideLoading();
-                
-                // Reset file selection sau khi upload thành công
-                clearFileSelection();
-                
-                showMessage(`Đã tải thành công ${jsonData.length} dòng dữ liệu`, 'success');
-                await loadCategories();
-                await loadInventoryData(currentCategory.id);
+
+// Reset file selection sau khi upload thành công
+clearFileSelection();
+
+// Tải lại dữ liệu
+await loadCategories();
+await loadInventoryData(currentCategory.id);
+
+// Sắp xếp tự động theo cột đầu tiên
+autoSortData();
+renderTableWithVisibility();
+
+hideLoading();
+showMessage(`Đã tải thành công ${jsonData.length} dòng dữ liệu và sắp xếp A-Z`, 'success');
 
             } catch (error) {
                 hideLoading();
@@ -2165,16 +2345,26 @@ async function saveData() {
         // Cập nhật thời gian lastUploadTime cho danh mục
         if (currentCategory && currentCategory.id) {
             batch.update(categoriesRef.doc(currentCategory.id), {
-                lastUploadTime: firebase.firestore.FieldValue.serverTimestamp()
+                lastUploadTime: firebase.firestore.FieldValue.serverTimestamp(),
+                lastSaveNotification: {
+                    categoryName: currentCategory.name,
+                    itemCount: updateCount,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                }
             });
         }
 
         await batch.commit();
         hideLoading();
         showMessage(`Đã lưu ${updateCount} dòng dữ liệu thành công`, 'success');
-        
+
         // Cập nhật danh mục
         loadCategories();
+
+        // Kiểm tra lại màu sau khi lưu
+        setTimeout(() => {
+            checkAllQuantities();
+        }, 200);
 
     } catch (error) {
         hideLoading();
@@ -2182,7 +2372,6 @@ async function saveData() {
         showMessage('Lỗi khi lưu dữ liệu', 'error');
     }
 }
-
 
 
 // Xóa dữ liệu
@@ -2301,15 +2490,21 @@ async function updateQuantity(itemId, value) {
         const item = tableData.find(item => item.id === itemId);
         if (item) {
             item.actualQuantity = quantity;
+            
+            // Log để debug (tùy chọn)
+            if (currentHeaders && currentHeaders.length > 0) {
+                const lastColumn = currentHeaders[currentHeaders.length - 1];
+                const expected = item[lastColumn];
+                console.log(`Item ${itemId}: Expected=${expected}, Actual=${quantity}`);
+            }
         }
-
-        console.log(`Updated quantity for ${itemId}: ${quantity}`);
 
     } catch (error) {
         console.error('Error updating quantity:', error);
         showMessage('Lỗi khi cập nhật số lượng', 'error');
     }
 }
+
 
 let currentHeaders = [];
 function sortTable(column) {
@@ -2413,8 +2608,8 @@ async function initializeApp() {
         if (adminPasswordForm) {
             adminPasswordForm.addEventListener('submit', handleAdminPasswordSubmit);
         }
+         setupCategoryListener();
 
-        console.log('App initialized successfully');
     } catch (error) {
         console.error('Error initializing app:', error);
         showMessage('Lỗi khởi tạo ứng dụng', 'error');
