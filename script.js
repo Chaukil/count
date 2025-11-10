@@ -2671,22 +2671,18 @@ async function initializeApp() {
         if (adminPasswordForm) {
             adminPasswordForm.addEventListener('submit', handleAdminPasswordSubmit);
         }
-         setupCategoryListener();
         
-        // Thiết lập listener cho category changes
+        // Setup category listener
         setupCategoryListener();
+
+        // Load notification state (SIMPLE VERSION - NO PUSH)
+        loadNotificationState();
         
-        // Thiết lập event listener cho notification toggle
+        // Setup notification toggle
         const notificationCheckbox = document.getElementById('notificationCheckbox');
         if (notificationCheckbox) {
             notificationCheckbox.addEventListener('change', handleNotificationToggle);
         }
-
-        // Khởi tạo messaging
-        await initializeMessaging();
-
-        // Load trạng thái notification
-        await loadNotificationState();
 
     } catch (error) {
         console.error('Error initializing app:', error);
@@ -2946,189 +2942,16 @@ function selectRole(role) {
         showMessage('Lỗi khi chọn vai trò', 'error');
     }
 }
+// ==================== SIMPLE NOTIFICATION SYSTEM (NO PUSH) ====================
 
-
-let messaging = null;
-let currentFCMToken = null;
 let notificationEnabled = false;
 
-async function initializeMessaging() {
-    try {
-        if (!firebase.messaging.isSupported()) {
-            console.log('Browser không hỗ trợ FCM');
-            return false;
-        }
-
-        messaging = firebase.messaging();
-        
-        // Xử lý foreground messages
-        messaging.onMessage((payload) => {
-            console.log('Foreground message:', payload);
-            
-            const { title, body } = payload.notification;
-            
-            playNotificationSound();
-            showDataUploadNotification(title, body);
-            
-            if (Notification.permission === 'granted') {
-                new Notification(title, {
-                    body: body,
-                    icon: '/favicon.ico',
-                    badge: '/favicon.ico',
-                    tag: 'inventory-notification',
-                    requireInteraction: true,
-                    vibrate: [200, 100, 200]
-                });
-            }
-        });
-
-        return true;
-    } catch (error) {
-        console.error('Error initializing messaging:', error);
-        return false;
-    }
-}
-
-
-// Yêu cầu quyền thông báo và lấy FCM token
-async function requestNotificationPermission() {
-    try {
-        // Kiểm tra browser support
-        if (!('Notification' in window)) {
-            await Dialog.alert('Trình duyệt không hỗ trợ thông báo', 'Thông báo');
-            return false;
-        }
-
-        if (!firebase.messaging.isSupported()) {
-            await Dialog.alert('Trình duyệt không hỗ trợ Firebase Messaging', 'Thông báo');
-            return false;
-        }
-
-        // Yêu cầu quyền
-        const permission = await Notification.requestPermission();
-        
-        if (permission !== 'granted') {
-            await Dialog.alert(
-                'Bạn cần cấp quyền thông báo để nhận cảnh báo kiểm kê.\n\n' +
-                'Hãy vào Cài đặt → Quyền → Cho phép Thông báo',
-                'Cần quyền thông báo'
-            );
-            return false;
-        }
-
-        // Lấy FCM token
-        showLoading('Đang đăng ký nhận thông báo...');
-        
-        const token = await messaging.getToken({
-            vapidKey: 'BH0-XWU5fu8M8mDDLCfyvSsNPb-2ZE6bcR52QWX33M5e84UM8OHSbtVKs89Nq2T5ap_KewyT9zmdSU3ZDX6xKXg' // Sẽ hướng dẫn lấy ở bước 3
-        });
-
-        if (!token) {
-            hideLoading();
-            await Dialog.error('Không thể lấy token thông báo');
-            return false;
-        }
-
-        // Lưu token vào Firestore
-        await saveNotificationToken(token);
-        
-        currentFCMToken = token;
-        hideLoading();
-        
-        console.log('FCM Token:', token);
-        return true;
-
-    } catch (error) {
-        hideLoading();
-        console.error('Error requesting notification permission:', error);
-        
-        if (error.code === 'messaging/permission-blocked') {
-            await Dialog.alert(
-                'Thông báo đã bị chặn.\n\n' +
-                'Hãy vào Cài đặt trình duyệt → Quyền → Cho phép Thông báo cho trang web này',
-                'Thông báo bị chặn'
-            );
-        } else {
-            await Dialog.error('Lỗi khi đăng ký thông báo: ' + error.message);
-        }
-        
-        return false;
-    }
-}
-
-// Lưu FCM token vào Firestore
-async function saveNotificationToken(token) {
-    try {
-        const tokensRef = db.collection('fcmTokens');
-        
-        // Kiểm tra token đã tồn tại chưa
-        const existingDoc = await tokensRef.doc(token).get();
-        
-        if (!existingDoc.exists) {
-            await tokensRef.doc(token).set({
-                token: token,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                lastUsed: firebase.firestore.FieldValue.serverTimestamp(),
-                userAgent: navigator.userAgent,
-                enabled: true
-            });
-        } else {
-            await tokensRef.doc(token).update({
-                lastUsed: firebase.firestore.FieldValue.serverTimestamp(),
-                enabled: true
-            });
-        }
-        
-        console.log('Token saved to Firestore');
-    } catch (error) {
-        console.error('Error saving token:', error);
-        throw error;
-    }
-}
-
-// Xóa FCM token khi tắt thông báo
-async function removeNotificationToken() {
-    try {
-        if (!currentFCMToken) {
-            console.log('No token to remove');
-            return;
-        }
-
-        // Xóa token khỏi Firestore
-        await db.collection('fcmTokens').doc(currentFCMToken).update({
-            enabled: false,
-            disabledAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-
-        // Xóa token khỏi Firebase Messaging
-        await messaging.deleteToken();
-        
-        currentFCMToken = null;
-        console.log('Token removed');
-        
-    } catch (error) {
-        console.error('Error removing token:', error);
-    }
-}
-
-async function loadNotificationState() {
+// Load trạng thái notification từ localStorage
+function loadNotificationState() {
     const saved = localStorage.getItem('notificationEnabled');
     notificationEnabled = saved === 'true';
     updateNotificationToggle(notificationEnabled);
-    
-    // Nếu đã bật, khởi tạo messaging
-    if (notificationEnabled && !currentFCMToken) {
-        const initialized = await initializeMessaging();
-        if (initialized) {
-            try {
-                await requestNotificationPermission();
-            } catch (error) {
-                console.log('Could not restore notification permission:', error);
-            }
-        }
-    }
 }
-
 
 // Cập nhật UI toggle
 function updateNotificationToggle(enabled) {
@@ -3138,44 +2961,95 @@ function updateNotificationToggle(enabled) {
     }
 }
 
-// Xử lý toggle notification
+// Xử lý toggle notification - ĐƠN GIẢN
 async function handleNotificationToggle(event) {
     const enabled = event.target.checked;
     
     if (enabled) {
-        showLoading('Đang bật thông báo...');
-        
-        // Khởi tạo messaging nếu chưa có
-        if (!messaging) {
-            const initialized = await initializeMessaging();
-            if (!initialized) {
-                hideLoading();
-                event.target.checked = false;
-                return;
-            }
-        }
-        
-        const granted = await requestNotificationPermission();
-        hideLoading();
-        
-        if (!granted) {
-            event.target.checked = false;
-            notificationEnabled = false;
-            localStorage.setItem('notificationEnabled', 'false');
-        } else {
-            notificationEnabled = true;
-            localStorage.setItem('notificationEnabled', 'true');
-            await Dialog.success('Đã bật thông báo thành công!', 'Thành công');
-        }
+        notificationEnabled = true;
+        localStorage.setItem('notificationEnabled', 'true');
+        showMessage('✅ Đã bật nhận thông báo', 'success');
     } else {
-        await removeNotificationToken();
         notificationEnabled = false;
         localStorage.setItem('notificationEnabled', 'false');
-        showMessage('Đã tắt thông báo', 'info');
+        showMessage('🔕 Đã tắt nhận thông báo', 'info');
     }
 }
 
-// ==================== NOTIFICATION SYSTEM - SIMPLE VERSION ====================
+// Hiển thị thông báo trên web (NO PUSH NOTIFICATION)
+function showDataUploadNotification(categoryName, itemCount) {
+    // Kiểm tra user có bật notification không
+    if (!notificationEnabled) {
+        console.log('Notification disabled by user');
+        return;
+    }
+    
+    // Phát âm thanh
+    playNotificationSound();
+    
+    // Hiển thị popup notification
+    const notificationDiv = document.createElement('div');
+    notificationDiv.className = 'save-notification';
+    notificationDiv.innerHTML = `
+        <div class="notification-icon">
+            <i class="fas fa-bell"></i>
+        </div>
+        <div class="notification-content">
+            <strong>📋 ${categoryName}</strong>
+            <span>Đã có ${itemCount} dòng dữ liệu mới. Đã đến lúc kiểm kê!</span>
+        </div>
+    `;
 
+    document.body.appendChild(notificationDiv);
 
+    // Tự động xóa sau 5 giây
+    setTimeout(() => {
+        notificationDiv.classList.add('fade-out');
+        setTimeout(() => notificationDiv.remove(), 300);
+    }, 5000);
+}
 
+// Hàm phát âm thanh thông báo (giữ nguyên)
+function playNotificationSound() {
+    try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioContext = new AudioContext();
+        
+        const oscillator1 = audioContext.createOscillator();
+        const gainNode1 = audioContext.createGain();
+        
+        oscillator1.connect(gainNode1);
+        gainNode1.connect(audioContext.destination);
+        
+        oscillator1.frequency.value = 800;
+        oscillator1.type = 'sine';
+        
+        gainNode1.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode1.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+        
+        oscillator1.start(audioContext.currentTime);
+        oscillator1.stop(audioContext.currentTime + 0.2);
+        
+        setTimeout(() => {
+            const oscillator2 = audioContext.createOscillator();
+            const gainNode2 = audioContext.createGain();
+            
+            oscillator2.connect(gainNode2);
+            gainNode2.connect(audioContext.destination);
+            
+            oscillator2.frequency.value = 1000;
+            oscillator2.type = 'sine';
+            
+            gainNode2.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+            
+            oscillator2.start(audioContext.currentTime);
+            oscillator2.stop(audioContext.currentTime + 0.2);
+        }, 150);
+        
+    } catch (error) {
+        console.log('Audio not supported:', error);
+    }
+}
+
+// ==================== END SIMPLE NOTIFICATION SYSTEM ====================
