@@ -629,7 +629,6 @@ function updateDataStats() {
 
 // Biến toàn cục để lưu listener
 let categoryListener = null;
-let lastNotificationTime = 0;
 
 // Hàm thiết lập listener cho category - ĐƠN GIẢN
 function setupCategoryListener() {
@@ -703,7 +702,7 @@ function playNotificationSound() {
             oscillator2.connect(gainNode2);
             gainNode2.connect(audioContext.destination);
             
-            oscillator2.frequency.value = 1000; // Hz
+            oscillator2.frequency.value = 1200; // Hz
             oscillator2.type = 'sine';
             
             gainNode2.gain.setValueAtTime(0.3, audioContext.currentTime);
@@ -1035,7 +1034,6 @@ function parseAndPreviewData(text) {
 
         // Phát hiện delimiter
         const delimiter = detectDelimiter(lines);
-        console.log('Detected delimiter:', delimiter === '\t' ? 'TAB' : delimiter);
 
         // Parse header
         const headers = delimiter === '\t' 
@@ -1049,8 +1047,6 @@ function parseAndPreviewData(text) {
             showPasteError('Không tìm thấy tiêu đề cột hợp lệ');
             return;
         }
-
-        console.log('Headers found:', validHeaders);
 
         // Parse các dòng dữ liệu
         const rows = [];
@@ -1086,8 +1082,6 @@ function parseAndPreviewData(text) {
             showPasteError('Không có dữ liệu sau dòng tiêu đề');
             return;
         }
-
-        console.log('Parsed rows:', rows.length);
 
         // Lưu vào cache
         pastedDataCache = {
@@ -1383,20 +1377,6 @@ function parseLineByDelimiter(line, delimiter) {
     
     return cells;
 }
-
-// Cập nhật hàm closeModal để cleanup event listeners
-const originalCloseModal = closeModal;
-closeModal = function(modalId) {
-    if (modalId === 'pasteDataModal') {
-        const pasteArea = document.getElementById('pasteArea');
-        if (pasteArea) {
-            pasteArea.removeEventListener('paste', handlePasteEvent);
-            pasteArea.removeEventListener('input', handlePasteInput);
-        }
-        clearPasteArea();
-    }
-    originalCloseModal(modalId);
-};
 
 function showMessage(message, type = 'info') {
     const messageDiv = document.createElement('div');
@@ -2065,13 +2045,13 @@ function showFileInfo(file) {
     fileInfo.classList.add('valid');
 }
 
-function toggleUserMenu() {
-    const userInfo = document.querySelector('.user-info');
-    const userMenu = document.querySelector('.user-menu');
+// function toggleUserMenu() {
+//     const userInfo = document.querySelector('.user-info');
+//     const userMenu = document.querySelector('.user-menu');
     
-    userInfo.classList.toggle('active');
-    userMenu.classList.toggle('show');
-}
+//     userInfo.classList.toggle('active');
+//     userMenu.classList.toggle('show');
+// }
 
 // Đóng menu khi click ra ngoài
 document.addEventListener('click', (e) => {
@@ -2348,27 +2328,27 @@ function hideLoading() {
     }
 }
 
-function formatDate(date) {
-    const d = new Date(date);
-    const pad = (n) => n < 10 ? '0' + n : n;
+// function formatDate(date) {
+//     const d = new Date(date);
+//     const pad = (n) => n < 10 ? '0' + n : n;
     
-    return `${pad(d.getDate())}${pad(d.getMonth() + 1)}${d.getFullYear()}_${pad(d.getHours())}${pad(d.getMinutes())}`;
-}
+//     return `${pad(d.getDate())}${pad(d.getMonth() + 1)}${d.getFullYear()}_${pad(d.getHours())}${pad(d.getMinutes())}`;
+// }
 
-function removeAccents(str) {
-    return str.normalize('NFD')
-             .replace(/[\u0300-\u036f]/g, '')
-             .replace(/đ/g, 'd')
-             .replace(/Đ/g, 'D');
-}
+// function removeAccents(str) {
+//     return str.normalize('NFD')
+//              .replace(/[\u0300-\u036f]/g, '')
+//              .replace(/đ/g, 'd')
+//              .replace(/Đ/g, 'D');
+// }
 
-function createValidFileName(name) {
-    return removeAccents(name)
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, '_')
-        .replace(/_+/g, '_')
-        .replace(/^_|_$/g, '');
-}
+// function createValidFileName(name) {
+//     return removeAccents(name)
+//         .toLowerCase()
+//         .replace(/[^a-z0-9]/g, '_')
+//         .replace(/_+/g, '_')
+//         .replace(/^_|_$/g, '');
+// }
 
 async function saveData() {
     try {
@@ -2558,7 +2538,6 @@ async function updateQuantity(itemId, value) {
             if (currentHeaders && currentHeaders.length > 0) {
                 const lastColumn = currentHeaders[currentHeaders.length - 1];
                 const expected = item[lastColumn];
-                console.log(`Item ${itemId}: Expected=${expected}, Actual=${quantity}`);
             }
         }
 
@@ -2572,7 +2551,6 @@ async function updateQuantity(itemId, value) {
 let currentHeaders = [];
 function sortTable(column) {
     try {
-        console.log('Sorting by column:', column);
 
         // Đảo chiều sắp xếp nếu click vào cùng một cột
         if (currentSortColumn === column) {
@@ -2721,7 +2699,6 @@ function showAddCategoryModal() {
 
 async function showManageCategoriesModal() {
     try {
-        console.log('Opening manage categories modal');
         const modal = document.getElementById('manageCategoriesModal');
         const listContainer = document.getElementById('categoriesList');
 
@@ -2785,7 +2762,6 @@ function createCategoryListItem(category) {
 
 async function editCategory(categoryId) {
     try {
-        console.log('Editing category:', categoryId);
         
         // Lấy dữ liệu danh mục từ Firestore
         const doc = await categoriesRef.doc(categoryId).get();
